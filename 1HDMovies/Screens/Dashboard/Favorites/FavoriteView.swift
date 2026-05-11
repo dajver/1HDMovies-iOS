@@ -29,30 +29,7 @@ struct FavoriteView: View {
                 ScrollView {
                     LazyVGrid(columns: columns, spacing: 16) {
                         ForEach(viewModel.favorites) { movie in
-                            NavigationLink(value: Route.movieDetails(url: movie.linkToDetails)) {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    AsyncImage(url: URL(string: movie.thumbnail)) { phase in
-                                        switch phase {
-                                        case .success(let image):
-                                            image
-                                                .resizable()
-                                                .aspectRatio(contentMode: .fill)
-                                                .frame(height: cardHeight)
-                                                .clipped()
-                                                .cornerRadius(8)
-                                        default:
-                                            RoundedRectangle(cornerRadius: 8)
-                                                .fill(Color.gray.opacity(0.3))
-                                                .frame(height: cardHeight)
-                                        }
-                                    }
-                                    Text(movie.name)
-                                        .font(.caption)
-                                        .foregroundColor(.white)
-                                        .lineLimit(2)
-                                }
-                            }
-                            .buttonStyle(.plain)
+                            FocusableFavoriteCard(movie: movie, cardHeight: cardHeight)
                         }
                     }
                     .padding()

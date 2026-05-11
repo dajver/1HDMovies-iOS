@@ -49,11 +49,8 @@ struct SearchView: View {
                 ScrollView {
                     LazyVGrid(columns: columns, spacing: 16) {
                         ForEach(viewModel.searchResults) { movie in
-                            NavigationLink(value: Route.movieDetails(url: movie.link)) {
-                                MovieCardView(movie: movie, width: .infinity, height: cardHeight)
-                                    .frame(maxWidth: .infinity)
-                            }
-                            .buttonStyle(.plain)
+                            FocusableMovieCard(movie: movie, width: .infinity, height: cardHeight)
+                                .frame(maxWidth: .infinity)
                         }
                     }
                     .padding()

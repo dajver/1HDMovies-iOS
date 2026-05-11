@@ -236,12 +236,9 @@ struct MovieDetailsView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 12) {
                         ForEach(viewModel.youMayAlsoLike) { movie in
-                            NavigationLink(value: Route.movieDetails(url: movie.link)) {
-                                MovieCardView(movie: movie,
-                                              width: isRegular ? 180 : 140,
-                                              height: isRegular ? 260 : 200)
-                            }
-                            .buttonStyle(.plain)
+                            FocusableMovieCard(movie: movie,
+                                               width: isRegular ? 180 : 140,
+                                               height: isRegular ? 260 : 200)
                         }
                     }
                     .padding(.horizontal)
@@ -287,17 +284,11 @@ struct MovieDetailsView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(seasons) { season in
-                            Button {
-                                viewModel.selectSeason(season)
-                            } label: {
-                                Text(season.seasonNumber)
-                                    .font(.subheadline)
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 8)
-                                    .background(viewModel.selectedSeason?.seasonId == season.seasonId ? Color.red : Color.gray.opacity(0.5))
-                                    .cornerRadius(8)
-                            }
+                            FocusableChip(
+                                text: season.seasonNumber,
+                                isSelected: viewModel.selectedSeason?.seasonId == season.seasonId,
+                                action: { viewModel.selectSeason(season) }
+                            )
                             .id(season.seasonId)
                         }
                     }
@@ -320,21 +311,10 @@ struct MovieDetailsView: View {
                     HStack(spacing: 8) {
                         ForEach(viewModel.selectedEpisodes) { episode in
                             NavigationLink(value: Route.watchMovie(url: episode.link)) {
-                                VStack(spacing: 4) {
-                                    Text(episode.episodeNumber)
-                                        .font(.subheadline)
-                                        .fontWeight(.bold)
-                                    if !episode.episodeName.isEmpty {
-                                        Text(episode.episodeName)
-                                            .font(.caption2)
-                                            .lineLimit(1)
-                                    }
-                                }
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                                .background(Color.gray.opacity(0.5))
-                                .cornerRadius(8)
+                                FocusableEpisodeChip(
+                                    episodeNumber: episode.episodeNumber,
+                                    episodeName: episode.episodeName
+                                )
                             }
                             .buttonStyle(.plain)
                         }

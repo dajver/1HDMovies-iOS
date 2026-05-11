@@ -106,12 +106,9 @@ struct DashboardView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: isRegular ? 16 : 12) {
                         ForEach(movies) { movie in
-                            NavigationLink(value: Route.movieDetails(url: movie.link)) {
-                                MovieCardView(movie: movie,
-                                              width: isRegular ? 180 : 140,
-                                              height: isRegular ? 260 : 200)
-                            }
-                            .buttonStyle(.plain)
+                            FocusableMovieCard(movie: movie,
+                                               width: isRegular ? 180 : 140,
+                                               height: isRegular ? 260 : 200)
                         }
                     }
                     .padding(.horizontal)

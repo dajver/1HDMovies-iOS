@@ -15,11 +15,8 @@ struct AllTvShowsView: View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 16) {
                 ForEach(viewModel.tvShows) { movie in
-                    NavigationLink(value: Route.movieDetails(url: movie.link)) {
-                        MovieCardView(movie: movie, width: .infinity, height: cardHeight)
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.plain)
+                    FocusableMovieCard(movie: movie, width: .infinity, height: cardHeight)
+                        .frame(maxWidth: .infinity)
                     .onAppear {
                         if movie == viewModel.tvShows.last && viewModel.canLoadMore {
                             Task { await viewModel.fetchTvShows() }
