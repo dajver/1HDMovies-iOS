@@ -1,0 +1,127 @@
+import SwiftUI
+
+struct DashboardView: View {
+    @State private var viewModel = DashboardViewModel()
+    @State private var navigationPath = NavigationPath()
+
+    var body: some View {
+        NavigationStack(path: $navigationPath) {
+            ScrollView {
+                LazyVStack(spacing: 16) {
+                    if viewModel.isMostPopularLoading {
+                        ProgressView()
+                            .frame(height: 240)
+                    } else {
+                        MostPopularCarouselView(movies: viewModel.mostPopular) { movie in
+                            navigationPath.append(Route.watchMovie(url: movie.link))
+                        }
+                    }
+
+                    if viewModel.isLoading {
+                        ProgressView()
+                            .padding()
+                    } else {
+                        let topMovies = viewModel.dashboardMovies.filter { $0.type == .movie }
+                        let topTvShows = viewModel.dashboardMovies.filter { $0.type == .tvShow }
+
+                        movieRow(title: "Top Movies", movies: topMovies)
+                        movieRow(title: "Top TV Shows", movies: topTvShows)
+                    }
+
+                    movieRow(title: "Movies", movies: viewModel.movies, seeAllRoute: .allMovies)
+                    movieRow(title: "TV Shows", movies: viewModel.tvShows, seeAllRoute: .allTvShows)
+                    movieRow(title: "Action", movies: viewModel.actionMovies, seeAllRoute: .genre(.action))
+                    movieRow(title: "Comedy", movies: viewModel.comedyMovies, seeAllRoute: .genre(.comedy))
+                    movieRow(title: "Drama", movies: viewModel.dramaMovies, seeAllRoute: .genre(.drama))
+                    movieRow(title: "Fantasy", movies: viewModel.fantasyMovies, seeAllRoute: .genre(.fantasy))
+                    movieRow(title: "Horror", movies: viewModel.horrorMovies, seeAllRoute: .genre(.horror))
+                    movieRow(title: "Mystery", movies: viewModel.mysteryMovies, seeAllRoute: .genre(.mystery))
+                    movieRow(title: "Top IMDB", movies: viewModel.topIMDBMovies, seeAllRoute: .genre(.topIMDB))
+                }
+                .padding(.vertical)
+            }
+            .background(Color.black)
+            .navigationTitle("1HD Movies")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    HStack(spacing: 16) {
+                        NavigationLink(value: Route.search) {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundColor(.white)
+                        }
+                        NavigationLink(value: Route.favorites) {
+                            Image(systemName: "heart.fill")
+                                .foregroundColor(.red)
+                        }
+                    }
+                }
+            }
+            .navigationDestination(for: Route.self) { route in
+                switch route {
+                case .movieDetails(let url):
+                    MovieDetailsView(movieUrl: url)
+                case .watchMovie(let url):
+                    WatchMovieView(movieUrl: url)
+                case .allMovies:
+                    AllMoviesView()
+                case .allTvShows:
+                    AllTvShowsView()
+                case .genre(let genre):
+                    GenreMoviesView(genre: genre)
+                case .search:
+                    SearchView()
+                case .favorites:
+                    FavoriteView()
+                }
+            }
+            .task {
+                await viewModel.fetchAll()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func movieRow(title: String, movies: [MoviesDataModel], seeAllRoute: Route? = nil) -> some View {
+        if !movies.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text(title)
+                        .font(.headline)
+                        .foregroundColor(.white)
+                    Spacer()
+                    if let route = seeAllRoute {
+                        NavigationLink(value: route) {
+                            Text("See All")
+                                .font(.caption)
+                                .foregroundColor(.blue)
+                        }
+                    }
+                }
+                .padding(.horizontal)
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: 12) {
+                        ForEach(movies) { movie in
+                            NavigationLink(value: Route.movieDetails(url: movie.link)) {
+                                MovieCardView(movie: movie)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal)
+                }
+            }
+        }
+    }
+}
+
+enum Route: Hashable {
+    case movieDetails(url: String)
+    case watchMovie(url: String)
+    case allMovies
+    case allTvShows
+    case genre(GenresEnum)
+    case search
+    case favorites
+}
