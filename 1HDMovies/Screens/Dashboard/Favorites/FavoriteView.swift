@@ -2,12 +2,14 @@ import SwiftUI
 
 struct FavoriteView: View {
     @State private var viewModel = FavoriteViewModel()
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
-    private let columns = [
-        GridItem(.flexible(), spacing: 12),
-        GridItem(.flexible(), spacing: 12),
-        GridItem(.flexible(), spacing: 12)
-    ]
+    private var columns: [GridItem] {
+        let count = horizontalSizeClass == .regular ? 6 : 3
+        return Array(repeating: GridItem(.flexible(), spacing: 12), count: count)
+    }
+
+    private var cardHeight: CGFloat { horizontalSizeClass == .regular ? 220 : 160 }
 
     var body: some View {
         Group {
@@ -35,13 +37,13 @@ struct FavoriteView: View {
                                             image
                                                 .resizable()
                                                 .aspectRatio(contentMode: .fill)
-                                                .frame(height: 160)
+                                                .frame(height: cardHeight)
                                                 .clipped()
                                                 .cornerRadius(8)
                                         default:
                                             RoundedRectangle(cornerRadius: 8)
                                                 .fill(Color.gray.opacity(0.3))
-                                                .frame(height: 160)
+                                                .frame(height: cardHeight)
                                         }
                                     }
                                     Text(movie.name)

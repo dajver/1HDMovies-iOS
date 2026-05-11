@@ -3,24 +3,26 @@ import SwiftUI
 struct GenreMoviesView: View {
     let genre: GenresEnum
     @State private var viewModel: GenreMoviesViewModel
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     init(genre: GenresEnum) {
         self.genre = genre
         self._viewModel = State(initialValue: GenreMoviesViewModel(genre: genre))
     }
 
-    private let columns = [
-        GridItem(.flexible(), spacing: 12),
-        GridItem(.flexible(), spacing: 12),
-        GridItem(.flexible(), spacing: 12)
-    ]
+    private var columns: [GridItem] {
+        let count = horizontalSizeClass == .regular ? 6 : 3
+        return Array(repeating: GridItem(.flexible(), spacing: 12), count: count)
+    }
+
+    private var cardHeight: CGFloat { horizontalSizeClass == .regular ? 220 : 160 }
 
     var body: some View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 16) {
                 ForEach(viewModel.movies) { movie in
                     NavigationLink(value: Route.movieDetails(url: movie.link)) {
-                        MovieCardView(movie: movie, width: .infinity, height: 160)
+                        MovieCardView(movie: movie, width: .infinity, height: cardHeight)
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.plain)

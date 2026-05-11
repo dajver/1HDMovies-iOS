@@ -4,6 +4,10 @@ struct MostPopularCarouselView: View {
     let movies: [MostPopularMoviesDataModel]
     let onTap: (MostPopularMoviesDataModel) -> Void
     @State private var currentIndex = 0
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    private var isRegular: Bool { horizontalSizeClass == .regular }
+    private var carouselHeight: CGFloat { isRegular ? 380 : 220 }
 
     var body: some View {
         if !movies.isEmpty {
@@ -17,12 +21,12 @@ struct MostPopularCarouselView: View {
                                     image
                                         .resizable()
                                         .aspectRatio(contentMode: .fill)
-                                        .frame(height: 220)
+                                        .frame(height: carouselHeight)
                                         .clipped()
                                 default:
                                     Rectangle()
                                         .fill(Color.gray.opacity(0.3))
-                                        .frame(height: 220)
+                                        .frame(height: carouselHeight)
                                         .overlay { ProgressView() }
                                 }
                             }
@@ -35,32 +39,31 @@ struct MostPopularCarouselView: View {
 
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(movie.name)
-                                    .font(.title3)
+                                    .font(isRegular ? .title2 : .title3)
                                     .fontWeight(.bold)
                                     .foregroundColor(.white)
                                     .lineLimit(2)
                                 Text(movie.quality)
-                                    .font(.caption)
+                                    .font(isRegular ? .body : .caption)
                                     .foregroundColor(.gray)
                                 if !movie.description.isEmpty {
                                     Text(movie.description)
-                                        .font(.caption)
+                                        .font(isRegular ? .body : .caption)
                                         .foregroundColor(.white.opacity(0.8))
-                                        .lineLimit(2)
+                                        .lineLimit(isRegular ? 3 : 2)
                                 }
                             }
-                            .padding()
+                            .padding(isRegular ? 24 : 16)
                         }
-                        .cornerRadius(12)
+                        .cornerRadius(isRegular ? 16 : 12)
                         .padding(.horizontal)
                         .tag(index)
                         .onTapGesture { onTap(movie) }
                     }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
-                .frame(height: 220)
+                .frame(height: carouselHeight)
 
-                // Page indicators below the carousel
                 HStack(spacing: 6) {
                     ForEach(0..<movies.count, id: \.self) { index in
                         Circle()

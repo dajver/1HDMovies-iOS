@@ -2,12 +2,14 @@ import SwiftUI
 
 struct SearchView: View {
     @State private var viewModel = SearchViewModel()
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
-    private let columns = [
-        GridItem(.flexible(), spacing: 12),
-        GridItem(.flexible(), spacing: 12),
-        GridItem(.flexible(), spacing: 12)
-    ]
+    private var columns: [GridItem] {
+        let count = horizontalSizeClass == .regular ? 6 : 3
+        return Array(repeating: GridItem(.flexible(), spacing: 12), count: count)
+    }
+
+    private var cardHeight: CGFloat { horizontalSizeClass == .regular ? 220 : 160 }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -32,6 +34,7 @@ struct SearchView: View {
             .background(Color.gray.opacity(0.2))
             .cornerRadius(10)
             .padding()
+            .frame(maxWidth: horizontalSizeClass == .regular ? 600 : .infinity)
 
             if viewModel.isLoading {
                 Spacer()
@@ -47,7 +50,7 @@ struct SearchView: View {
                     LazyVGrid(columns: columns, spacing: 16) {
                         ForEach(viewModel.searchResults) { movie in
                             NavigationLink(value: Route.movieDetails(url: movie.link)) {
-                                MovieCardView(movie: movie, width: .infinity, height: 160)
+                                MovieCardView(movie: movie, width: .infinity, height: cardHeight)
                                     .frame(maxWidth: .infinity)
                             }
                             .buttonStyle(.plain)

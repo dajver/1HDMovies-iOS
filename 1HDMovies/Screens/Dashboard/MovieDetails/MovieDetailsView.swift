@@ -4,6 +4,9 @@ struct MovieDetailsView: View {
     let movieUrl: String
     @State private var viewModel = MovieDetailsViewModel()
     @State private var isFavorite = false
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    private var isRegular: Bool { horizontalSizeClass == .regular }
 
     var body: some View {
         ScrollView {
@@ -11,121 +14,11 @@ struct MovieDetailsView: View {
                 ProgressView()
                     .padding(.top, 100)
             } else if let movie = viewModel.movieDetails {
-                VStack(alignment: .leading, spacing: 16) {
-                    // Poster
-                    HStack {
-                        Spacer()
-                        AsyncImage(url: URL(string: movie.thumbnail)) { phase in
-                            switch phase {
-                            case .success(let image):
-                                image
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fit)
-                                    .frame(height: 200)
-                                    .cornerRadius(12)
-                            default:
-                                Rectangle()
-                                    .fill(Color.gray.opacity(0.3))
-                                    .frame(width: 140, height: 200)
-                                    .cornerRadius(12)
-                            }
-                        }
-                        Spacer()
-                    }
-
-                    // Title & Quality
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(movie.name)
-                            .font(.title2)
-                            .fontWeight(.bold)
-                            .foregroundColor(.white)
-
-                        if !movie.quality.isEmpty {
-                            Text(movie.quality)
-                                .font(.caption)
-                                .fontWeight(.bold)
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(Color.red)
-                                .cornerRadius(4)
-                        }
-
-                        // Description
-                        if !movie.description.isEmpty {
-                            Text(movie.description)
-                                .font(.body)
-                                .foregroundColor(.white.opacity(0.8))
-                        }
-
-                        // Details grid
-                        detailsSection(movie: movie)
-                    }
-                    .padding(.horizontal)
-
-                    // Watch button (for movies)
-                    if movie.seasonsList == nil || movie.seasonsList!.isEmpty {
-                        NavigationLink(value: Route.watchMovie(url: movie.watchMovieLinkWithEpisodeId)) {
-                            HStack {
-                                Image(systemName: "play.fill")
-                                Text("Watch Now")
-                            }
-                            .font(.headline)
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color.red)
-                            .cornerRadius(12)
-                        }
-                        .padding(.horizontal)
-                    }
-
-                    // Favorite button
-                    Button {
-                        viewModel.toggleFavorite()
-                        isFavorite = viewModel.isFavorite()
-                    } label: {
-                        HStack {
-                            Image(systemName: isFavorite ? "heart.fill" : "heart")
-                            Text(isFavorite ? "Remove from Favorites" : "Add to Favorites")
-                        }
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(isFavorite ? Color.gray : Color.blue)
-                        .cornerRadius(12)
-                    }
-                    .padding(.horizontal)
-
-                    // Seasons & Episodes (for TV shows)
-                    if let seasons = movie.seasonsList, !seasons.isEmpty {
-                        seasonsSection(seasons: seasons)
-                    }
-
-                    // You May Also Like
-                    if !viewModel.youMayAlsoLike.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("You May Also Like")
-                                .font(.headline)
-                                .foregroundColor(.white)
-                                .padding(.horizontal)
-
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                LazyHStack(spacing: 12) {
-                                    ForEach(viewModel.youMayAlsoLike) { movie in
-                                        NavigationLink(value: Route.movieDetails(url: movie.link)) {
-                                            MovieCardView(movie: movie)
-                                        }
-                                        .buttonStyle(.plain)
-                                    }
-                                }
-                                .padding(.horizontal)
-                            }
-                        }
-                    }
+                if isRegular {
+                    iPadLayout(movie: movie)
+                } else {
+                    iPhoneLayout(movie: movie)
                 }
-                .padding(.vertical)
             }
         }
         .background(Color.black)
@@ -134,6 +27,226 @@ struct MovieDetailsView: View {
             await viewModel.fetchDetails(url: movieUrl)
             isFavorite = viewModel.isFavorite()
             await viewModel.fetchYouMayAlsoLike(url: movieUrl)
+        }
+    }
+
+    // MARK: - iPad / TV layout (side-by-side)
+    @ViewBuilder
+    private func iPadLayout(movie: MoviesDetailsDataModel) -> some View {
+        VStack(alignment: .leading, spacing: 24) {
+            HStack(alignment: .top, spacing: 24) {
+                // Left: Poster
+                AsyncImage(url: URL(string: movie.thumbnail)) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 280, height: 400)
+                            .cornerRadius(16)
+                    default:
+                        Rectangle()
+                            .fill(Color.gray.opacity(0.3))
+                            .frame(width: 280, height: 400)
+                            .cornerRadius(16)
+                    }
+                }
+
+                // Right: Info
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(movie.name)
+                        .font(.title)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+
+                    if !movie.quality.isEmpty {
+                        Text(movie.quality)
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.red)
+                            .cornerRadius(4)
+                    }
+
+                    if !movie.description.isEmpty {
+                        Text(movie.description)
+                            .font(.body)
+                            .foregroundColor(.white.opacity(0.8))
+                    }
+
+                    detailsSection(movie: movie)
+
+                    HStack(spacing: 12) {
+                        if movie.seasonsList == nil || movie.seasonsList!.isEmpty {
+                            NavigationLink(value: Route.watchMovie(url: movie.watchMovieLinkWithEpisodeId)) {
+                                HStack {
+                                    Image(systemName: "play.fill")
+                                    Text("Watch Now")
+                                }
+                                .font(.headline)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 32)
+                                .padding(.vertical, 12)
+                                .background(Color.red)
+                                .cornerRadius(12)
+                            }
+                        }
+
+                        Button {
+                            viewModel.toggleFavorite()
+                            isFavorite = viewModel.isFavorite()
+                        } label: {
+                            HStack {
+                                Image(systemName: isFavorite ? "heart.fill" : "heart")
+                                Text(isFavorite ? "Remove" : "Favorite")
+                            }
+                            .font(.headline)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 32)
+                            .padding(.vertical, 12)
+                            .background(isFavorite ? Color.gray : Color.blue)
+                            .cornerRadius(12)
+                        }
+                    }
+                    .padding(.top, 8)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.horizontal, 32)
+            .padding(.top)
+
+            // Seasons & Episodes
+            if let seasons = movie.seasonsList, !seasons.isEmpty {
+                seasonsSection(seasons: seasons)
+            }
+
+            // You May Also Like
+            youMayAlsoLikeSection()
+        }
+        .padding(.vertical)
+    }
+
+    // MARK: - iPhone layout (vertical)
+    @ViewBuilder
+    private func iPhoneLayout(movie: MoviesDetailsDataModel) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Poster
+            HStack {
+                Spacer()
+                AsyncImage(url: URL(string: movie.thumbnail)) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(height: 200)
+                            .cornerRadius(12)
+                    default:
+                        Rectangle()
+                            .fill(Color.gray.opacity(0.3))
+                            .frame(width: 140, height: 200)
+                            .cornerRadius(12)
+                    }
+                }
+                Spacer()
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(movie.name)
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+
+                if !movie.quality.isEmpty {
+                    Text(movie.quality)
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.red)
+                        .cornerRadius(4)
+                }
+
+                if !movie.description.isEmpty {
+                    Text(movie.description)
+                        .font(.body)
+                        .foregroundColor(.white.opacity(0.8))
+                }
+
+                detailsSection(movie: movie)
+            }
+            .padding(.horizontal)
+
+            if movie.seasonsList == nil || movie.seasonsList!.isEmpty {
+                NavigationLink(value: Route.watchMovie(url: movie.watchMovieLinkWithEpisodeId)) {
+                    HStack {
+                        Image(systemName: "play.fill")
+                        Text("Watch Now")
+                    }
+                    .font(.headline)
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.red)
+                    .cornerRadius(12)
+                }
+                .padding(.horizontal)
+            }
+
+            Button {
+                viewModel.toggleFavorite()
+                isFavorite = viewModel.isFavorite()
+            } label: {
+                HStack {
+                    Image(systemName: isFavorite ? "heart.fill" : "heart")
+                    Text(isFavorite ? "Remove from Favorites" : "Add to Favorites")
+                }
+                .font(.headline)
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(isFavorite ? Color.gray : Color.blue)
+                .cornerRadius(12)
+            }
+            .padding(.horizontal)
+
+            if let seasons = movie.seasonsList, !seasons.isEmpty {
+                seasonsSection(seasons: seasons)
+            }
+
+            youMayAlsoLikeSection()
+        }
+        .padding(.vertical)
+    }
+
+    // MARK: - Shared sections
+
+    @ViewBuilder
+    private func youMayAlsoLikeSection() -> some View {
+        if !viewModel.youMayAlsoLike.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("You May Also Like")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                    .padding(.horizontal)
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: 12) {
+                        ForEach(viewModel.youMayAlsoLike) { movie in
+                            NavigationLink(value: Route.movieDetails(url: movie.link)) {
+                                MovieCardView(movie: movie,
+                                              width: isRegular ? 180 : 140,
+                                              height: isRegular ? 260 : 200)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal)
+                }
+            }
         }
     }
 
@@ -197,7 +310,6 @@ struct MovieDetailsView: View {
                 }
             }
 
-            // Episodes
             if !viewModel.selectedEpisodes.isEmpty {
                 Text("Episodes")
                     .font(.headline)

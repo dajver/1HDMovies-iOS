@@ -3,6 +3,9 @@ import SwiftUI
 struct DashboardView: View {
     @State private var viewModel = DashboardViewModel()
     @State private var navigationPath = NavigationPath()
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    private var isRegular: Bool { horizontalSizeClass == .regular }
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
@@ -10,7 +13,7 @@ struct DashboardView: View {
                 LazyVStack(spacing: 16) {
                     if viewModel.isMostPopularLoading {
                         ProgressView()
-                            .frame(height: 240)
+                            .frame(height: isRegular ? 380 : 220)
                     } else {
                         MostPopularCarouselView(movies: viewModel.mostPopular) { movie in
                             navigationPath.append(Route.watchMovie(url: movie.link))
@@ -87,13 +90,13 @@ struct DashboardView: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text(title)
-                        .font(.headline)
+                        .font(isRegular ? .title3 : .headline)
                         .foregroundColor(.white)
                     Spacer()
                     if let route = seeAllRoute {
                         NavigationLink(value: route) {
                             Text("See All")
-                                .font(.caption)
+                                .font(isRegular ? .body : .caption)
                                 .foregroundColor(.blue)
                         }
                     }
@@ -101,10 +104,12 @@ struct DashboardView: View {
                 .padding(.horizontal)
 
                 ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: 12) {
+                    LazyHStack(spacing: isRegular ? 16 : 12) {
                         ForEach(movies) { movie in
                             NavigationLink(value: Route.movieDetails(url: movie.link)) {
-                                MovieCardView(movie: movie)
+                                MovieCardView(movie: movie,
+                                              width: isRegular ? 180 : 140,
+                                              height: isRegular ? 260 : 200)
                             }
                             .buttonStyle(.plain)
                         }
