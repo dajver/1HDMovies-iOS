@@ -13,20 +13,24 @@ struct MovieDetailsView: View {
             } else if let movie = viewModel.movieDetails {
                 VStack(alignment: .leading, spacing: 16) {
                     // Poster
-                    AsyncImage(url: URL(string: movie.thumbnail)) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                                .frame(maxWidth: .infinity)
-                                .cornerRadius(12)
-                        default:
-                            Rectangle()
-                                .fill(Color.gray.opacity(0.3))
-                                .frame(height: 300)
-                                .cornerRadius(12)
+                    HStack {
+                        Spacer()
+                        AsyncImage(url: URL(string: movie.thumbnail)) { phase in
+                            switch phase {
+                            case .success(let image):
+                                image
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .frame(height: 200)
+                                    .cornerRadius(12)
+                            default:
+                                Rectangle()
+                                    .fill(Color.gray.opacity(0.3))
+                                    .frame(width: 140, height: 200)
+                                    .cornerRadius(12)
+                            }
                         }
+                        Spacer()
                     }
 
                     // Title & Quality
