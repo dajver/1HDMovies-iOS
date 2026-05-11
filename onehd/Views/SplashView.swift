@@ -9,15 +9,10 @@ struct SplashView: View {
         } else {
             ZStack {
                 Color.black.ignoresSafeArea()
-                VStack(spacing: 16) {
-                    Image(systemName: "film")
-                        .font(.system(size: 60))
-                        .foregroundColor(.red)
-                    Text("1HD Movies")
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
-                }
+                Image("SplashLogo")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 220)
             }
             .task {
                 try? await Task.sleep(for: .seconds(2))
