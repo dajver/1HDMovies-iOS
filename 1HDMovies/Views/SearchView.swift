@@ -18,9 +18,6 @@ struct SearchView: View {
                     .foregroundColor(.white)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
-                    .onSubmit {
-                        Task { await viewModel.search() }
-                    }
                 if !viewModel.searchText.isEmpty {
                     Button {
                         viewModel.searchText = ""

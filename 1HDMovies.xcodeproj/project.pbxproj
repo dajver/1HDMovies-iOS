@@ -11,13 +11,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		F75095792FB1CDA3005E1D8B /* onehd.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = onehd.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F75095792FB1CDA3005E1D8B /* 1HDMovies.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = 1HDMovies.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		F750957B2FB1CDA3005E1D8B /* onehd */ = {
+		F750957B2FB1CDA3005E1D8B /* 1HDMovies */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = onehd;
+			path = 1HDMovies;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -37,7 +37,7 @@
 		F75095702FB1CDA3005E1D8B = {
 			isa = PBXGroup;
 			children = (
-				F750957B2FB1CDA3005E1D8B /* onehd */,
+				F750957B2FB1CDA3005E1D8B /* 1HDMovies */,
 				F750957A2FB1CDA3005E1D8B /* Products */,
 			);
 			sourceTree = "<group>";
@@ -45,7 +45,7 @@
 		F750957A2FB1CDA3005E1D8B /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				F75095792FB1CDA3005E1D8B /* onehd.app */,
+				F75095792FB1CDA3005E1D8B /* 1HDMovies.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -53,9 +53,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		F75095782FB1CDA3005E1D8B /* onehd */ = {
+		F75095782FB1CDA3005E1D8B /* 1HDMovies */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = F75095862FB1CDA4005E1D8B /* Build configuration list for PBXNativeTarget "onehd" */;
+			buildConfigurationList = F75095862FB1CDA4005E1D8B /* Build configuration list for PBXNativeTarget "1HDMovies" */;
 			buildPhases = (
 				F75095752FB1CDA3005E1D8B /* Sources */,
 				F75095762FB1CDA3005E1D8B /* Frameworks */,
@@ -66,14 +66,14 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				F750957B2FB1CDA3005E1D8B /* onehd */,
+				F750957B2FB1CDA3005E1D8B /* 1HDMovies */,
 			);
-			name = onehd;
+			name = 1HDMovies;
 			packageProductDependencies = (
 				F7509590FB1CDA30005E1D8C /* SwiftSoup */,
 			);
-			productName = onehd;
-			productReference = F75095792FB1CDA3005E1D8B /* onehd.app */;
+			productName = 1HDMovies;
+			productReference = F75095792FB1CDA3005E1D8B /* 1HDMovies.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -91,7 +91,7 @@
 					};
 				};
 			};
-			buildConfigurationList = F75095742FB1CDA3005E1D8B /* Build configuration list for PBXProject "onehd" */;
+			buildConfigurationList = F75095742FB1CDA3005E1D8B /* Build configuration list for PBXProject "1HDMovies" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -108,7 +108,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				F75095782FB1CDA3005E1D8B /* onehd */,
+				F75095782FB1CDA3005E1D8B /* 1HDMovies */,
 			);
 		};
 /* End PBXProject section */
@@ -328,7 +328,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		F75095742FB1CDA3005E1D8B /* Build configuration list for PBXProject "onehd" */ = {
+		F75095742FB1CDA3005E1D8B /* Build configuration list for PBXProject "1HDMovies" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				F75095842FB1CDA4005E1D8B /* Debug */,
@@ -337,7 +337,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		F75095862FB1CDA4005E1D8B /* Build configuration list for PBXNativeTarget "onehd" */ = {
+		F75095862FB1CDA4005E1D8B /* Build configuration list for PBXNativeTarget "1HDMovies" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				F75095872FB1CDA4005E1D8B /* Debug */,
