@@ -76,6 +76,8 @@ struct DashboardView: View {
                     SearchView()
                 case .favorites:
                     FavoriteView()
+                case .filter:
+                    FilterView()
                 }
             }
             .task {
@@ -126,4 +128,5 @@ enum Route: Hashable {
     case genre(GenresEnum)
     case search
     case favorites
+    case filter
 }
