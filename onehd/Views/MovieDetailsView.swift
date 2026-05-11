@@ -166,23 +166,31 @@ struct MovieDetailsView: View {
                 .foregroundColor(.white)
                 .padding(.horizontal)
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(seasons) { season in
-                        Button {
-                            viewModel.selectSeason(season)
-                        } label: {
-                            Text(season.seasonNumber)
-                                .font(.subheadline)
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 8)
-                                .background(viewModel.selectedSeason?.seasonId == season.seasonId ? Color.red : Color.gray.opacity(0.5))
-                                .cornerRadius(8)
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(seasons) { season in
+                            Button {
+                                viewModel.selectSeason(season)
+                            } label: {
+                                Text(season.seasonNumber)
+                                    .font(.subheadline)
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 8)
+                                    .background(viewModel.selectedSeason?.seasonId == season.seasonId ? Color.red : Color.gray.opacity(0.5))
+                                    .cornerRadius(8)
+                            }
+                            .id(season.seasonId)
                         }
                     }
+                    .padding(.horizontal)
                 }
-                .padding(.horizontal)
+                .onAppear {
+                    if let lastSeason = seasons.last {
+                        proxy.scrollTo(lastSeason.seasonId, anchor: .trailing)
+                    }
+                }
             }
 
             // Episodes
