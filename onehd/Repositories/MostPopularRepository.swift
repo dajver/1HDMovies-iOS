@@ -32,17 +32,24 @@ class MostPopularRepository {
             i += 3
         }
 
-        let names = try movieDetailsContainer.select("a").eachAttr("title")
+        // Get names from <a> tags that have a title attribute
+        let allLinks = try movieDetailsContainer.select("a")
+        var names: [String] = []
+        for link in allLinks.array() {
+            let title = try link.attr("title")
+            if !title.isEmpty {
+                names.append(title)
+            }
+        }
+
+        // Get description text per p.description element
         let descriptionElements = try movieDetailsContainer.select("p.description")
         var descriptions: [String] = []
         for element in descriptionElements.array() {
-            for textNode in element.textNodes() {
-                let text = textNode.text().trimmingCharacters(in: .whitespacesAndNewlines)
-                if !text.isEmpty {
-                    descriptions.append(text)
-                }
-            }
+            let text = try element.text()
+            descriptions.append(text)
         }
+
         let links = try movieDetailsContainer.select("div.div-buttons").select("a").eachAttr("href")
 
         var movies: [MostPopularMoviesDataModel] = []
