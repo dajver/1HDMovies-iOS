@@ -11,8 +11,11 @@ struct VideoPlayerView: View {
     var subtitles: [SubtitleTrack] = []
     var episodes: [MovieEpisodesDataModel] = []
     var currentEpisodeIndex: Int = 0
+    var servers: [ServerOption] = []
+    var selectedServer: ServerOption?
     let onClose: () -> Void
     var onEpisodeChange: ((Int) -> Void)?
+    var onServerChange: ((ServerOption) -> Void)?
 
     @State private var presented = false
 
@@ -48,8 +51,11 @@ struct VideoPlayerView: View {
             subtitles: subtitles,
             episodes: episodes,
             currentEpisodeIndex: currentEpisodeIndex,
+            servers: servers,
+            selectedServer: selectedServer,
             onClose: onClose,
-            onEpisodeChange: onEpisodeChange
+            onEpisodeChange: onEpisodeChange,
+            onServerChange: onServerChange
         )
         playerVC.modalPresentationStyle = .fullScreen
 
@@ -76,8 +82,11 @@ class CustomPlayerViewController: UIViewController {
     private let subtitles: [SubtitleTrack]
     private let episodes: [MovieEpisodesDataModel]
     private let currentEpisodeIndex: Int
+    private let servers: [ServerOption]
+    private let selectedServer: ServerOption?
     private let onClose: () -> Void
     private let onEpisodeChange: ((Int) -> Void)?
+    private let onServerChange: ((ServerOption) -> Void)?
 
     // Video layer
     private var playerLayer: AVPlayerLayer!
@@ -99,6 +108,9 @@ class CustomPlayerViewController: UIViewController {
     // Bottom options row (below seek bar)
     private let subtitlesButton = UIButton(type: .system)
     private let speedButton = UIButton(type: .system)
+    private let serverButton = UIButton(type: .system)
+    private var optionsStack: UIStackView?
+    private var optionsRowHeightConstraint: NSLayoutConstraint?
 
     // Subtitles
     private let subtitleLabel = UILabel()
@@ -121,13 +133,18 @@ class CustomPlayerViewController: UIViewController {
     private var timeControlObservation: NSKeyValueObservation?
 
     init(player: AVPlayer, subtitles: [SubtitleTrack], episodes: [MovieEpisodesDataModel],
-         currentEpisodeIndex: Int, onClose: @escaping () -> Void, onEpisodeChange: ((Int) -> Void)?) {
+         currentEpisodeIndex: Int, servers: [ServerOption], selectedServer: ServerOption?,
+         onClose: @escaping () -> Void, onEpisodeChange: ((Int) -> Void)?,
+         onServerChange: ((ServerOption) -> Void)?) {
         self.player = player
         self.subtitles = subtitles
         self.episodes = episodes
         self.currentEpisodeIndex = currentEpisodeIndex
+        self.servers = servers
+        self.selectedServer = selectedServer
         self.onClose = onClose
         self.onEpisodeChange = onEpisodeChange
+        self.onServerChange = onServerChange
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -159,6 +176,21 @@ class CustomPlayerViewController: UIViewController {
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         playerLayer.frame = view.bounds
+        updateOptionsLayout()
+    }
+
+    private func updateOptionsLayout() {
+        guard let stack = optionsStack else { return }
+        let isLandscape = view.bounds.width > view.bounds.height
+        if isLandscape {
+            // Landscape: everything in one horizontal row
+            stack.axis = .horizontal
+            stack.spacing = 24
+        } else {
+            // Portrait: [Subtitles | Speed] on top, Server below
+            stack.axis = .vertical
+            stack.spacing = 4
+        }
     }
 
     deinit {
@@ -335,7 +367,7 @@ class CustomPlayerViewController: UIViewController {
             optionsRow.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -4),
             optionsRow.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 16),
             optionsRow.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
-            optionsRow.heightAnchor.constraint(equalToConstant: 32)
+            optionsRow.heightAnchor.constraint(greaterThanOrEqualToConstant: 32)
         ])
 
         // Subtitles button
@@ -349,19 +381,43 @@ class CustomPlayerViewController: UIViewController {
         speedButton.addTarget(self, action: #selector(speedTapped), for: .touchUpInside)
         optionsRow.addSubview(speedButton)
 
-        let optionsStack = UIStackView(arrangedSubviews: [subtitlesButton, speedButton])
-        optionsStack.axis = .horizontal
-        optionsStack.spacing = 24
-        optionsStack.alignment = .center
-        optionsStack.translatesAutoresizingMaskIntoConstraints = false
-        optionsRow.addSubview(optionsStack)
+        // Server button
+        let serverName = selectedServer?.name ?? "Server"
+        configureTextButton(serverButton, icon: "server.rack", title: serverName)
+        serverButton.addTarget(self, action: #selector(serverTapped), for: .touchUpInside)
+        serverButton.isHidden = servers.count <= 1
+        optionsRow.addSubview(serverButton)
+
+        // Row 1: Subtitles + Speed (always horizontal)
+        var row1Items: [UIView] = []
+        if !subtitles.isEmpty { row1Items.append(subtitlesButton) }
+        row1Items.append(speedButton)
+
+        let row1Stack = UIStackView(arrangedSubviews: row1Items)
+        row1Stack.axis = .horizontal
+        row1Stack.spacing = 24
+        row1Stack.alignment = .center
+        row1Stack.translatesAutoresizingMaskIntoConstraints = false
+
+        // Outer stack: row1 on top, server below (vertical in portrait, horizontal in landscape)
+        var outerItems: [UIView] = [row1Stack]
+        if servers.count > 1 { outerItems.append(serverButton) }
+
+        optionsStack = UIStackView(arrangedSubviews: outerItems)
+        optionsStack!.alignment = .center
+        optionsStack!.translatesAutoresizingMaskIntoConstraints = false
+        optionsRow.addSubview(optionsStack!)
 
         NSLayoutConstraint.activate([
-            optionsStack.centerXAnchor.constraint(equalTo: optionsRow.centerXAnchor),
-            optionsStack.centerYAnchor.constraint(equalTo: optionsRow.centerYAnchor),
+            optionsStack!.centerXAnchor.constraint(equalTo: optionsRow.centerXAnchor),
+            optionsStack!.topAnchor.constraint(equalTo: optionsRow.topAnchor),
+            optionsStack!.bottomAnchor.constraint(lessThanOrEqualTo: optionsRow.bottomAnchor),
             subtitlesButton.heightAnchor.constraint(equalToConstant: 32),
-            speedButton.heightAnchor.constraint(equalToConstant: 32)
+            speedButton.heightAnchor.constraint(equalToConstant: 32),
+            serverButton.heightAnchor.constraint(equalToConstant: 32)
         ])
+
+        updateOptionsLayout()
     }
 
     private func configureSymbolButton(_ button: UIButton, systemName: String, size: CGFloat) {
@@ -559,6 +615,23 @@ class CustomPlayerViewController: UIViewController {
             })
         }
         showPickerPanel(title: "Playback Speed", items: items)
+        scheduleHideControls()
+    }
+
+    // MARK: - Server
+
+    @objc private func serverTapped() {
+        var items: [PickerItem] = []
+        for server in servers {
+            let isSelected = server.id == selectedServer?.id
+            items.append(PickerItem(title: server.name, isSelected: isSelected) { [weak self] in
+                self?.player.pause()
+                self?.dismiss(animated: true) {
+                    self?.onServerChange?(server)
+                }
+            })
+        }
+        showPickerPanel(title: "Server", items: items)
         scheduleHideControls()
     }
 

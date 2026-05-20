@@ -15,6 +15,7 @@ struct WatchMovieView: View {
     @State private var detectedSubtitles: [SubtitleTrack] = []
     @State private var activeEpisodeIndex: Int = 0
     @State private var activeMovieUrl: String = ""
+    @State private var streamKey: UUID = UUID()
 
     private var isPlayerShowing: Bool { detectedStreamUrl != nil }
 
@@ -29,13 +30,18 @@ struct WatchMovieView: View {
                     subtitles: detectedSubtitles,
                     episodes: episodes,
                     currentEpisodeIndex: activeEpisodeIndex,
+                    servers: viewModel.servers,
+                    selectedServer: viewModel.selectedServer,
                     onClose: { dismiss() },
                     onEpisodeChange: { index in
                         loadEpisode(at: index)
+                    },
+                    onServerChange: { server in
+                        switchServer(server)
                     }
                 )
                 .ignoresSafeArea()
-                .id(streamUrl) // Force recreate player when stream changes
+                .id(streamKey)
             } else {
                 if !viewModel.isLoading {
                     StreamDetectorWebView(
@@ -77,13 +83,22 @@ struct WatchMovieView: View {
         guard index >= 0, index < episodes.count else { return }
         activeEpisodeIndex = index
         activeMovieUrl = episodes[index].link
-        detectedStreamUrl = nil
-        detectedSubtitles = []
-        viewModel.embedUrl = nil
-        viewModel.isLoading = true
+        resetStream()
         Task {
             await viewModel.fetchEmbedUrl(watchUrl: episodes[index].link)
         }
+    }
+
+    private func switchServer(_ server: ServerOption) {
+        viewModel.selectServer(server)
+        resetStream()
+    }
+
+    private func resetStream() {
+        detectedStreamUrl = nil
+        detectedSubtitles = []
+        streamKey = UUID()
+        viewModel.isLoading = false
     }
 }
 

@@ -1,9 +1,17 @@
 import Foundation
 import SwiftSoup
 
+struct ServerOption: Identifiable, Hashable {
+    let id = UUID()
+    let name: String
+    let embedUrl: String
+}
+
 @Observable
 class WatchMovieViewModel {
     var embedUrl: String?
+    var servers: [ServerOption] = []
+    var selectedServer: ServerOption?
     var isLoading = true
 
     func fetchEmbedUrl(watchUrl: String) async {
@@ -16,10 +24,23 @@ class WatchMovieViewModel {
                 let plUrl = String(html[range])
                 let serverHtml = try await HttpClient.shared.get(plUrl)
                 let doc = try SwiftSoup.parse(serverHtml)
-                let firstServer = try doc.select("a.sv-item").first()
-                let url = try firstServer?.attr("data-id")
+                let serverElements = try doc.select("a.sv-item")
+
+                var options: [ServerOption] = []
+                for element in serverElements {
+                    let name = try element.text().trimmingCharacters(in: .whitespacesAndNewlines)
+                    let url = try element.attr("data-id")
+                    if !url.isEmpty {
+                        options.append(ServerOption(name: name, embedUrl: url))
+                    }
+                }
+
                 await MainActor.run {
-                    self.embedUrl = url
+                    self.servers = options
+                    if let first = options.first {
+                        self.selectedServer = first
+                        self.embedUrl = first.embedUrl
+                    }
                     self.isLoading = false
                 }
             } else {
@@ -28,5 +49,10 @@ class WatchMovieViewModel {
         } catch {
             await MainActor.run { self.isLoading = false }
         }
+    }
+
+    func selectServer(_ server: ServerOption) {
+        selectedServer = server
+        embedUrl = server.embedUrl
     }
 }
