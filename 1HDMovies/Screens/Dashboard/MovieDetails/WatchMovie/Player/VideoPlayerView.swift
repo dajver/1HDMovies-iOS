@@ -445,7 +445,7 @@ class CustomPlayerViewController: UIViewController {
 
     private func setupGestures() {
         let tap = UITapGestureRecognizer(target: self, action: #selector(toggleControls))
-        tap.cancelsTouchesInView = false
+        tap.delegate = self
         view.addGestureRecognizer(tap)
     }
 
@@ -496,21 +496,23 @@ class CustomPlayerViewController: UIViewController {
     }
 
     @objc private func playPauseTapped() {
-        if player.timeControlStatus == .playing { player.pause() } else { player.play() }
-        scheduleHideControls()
+        if player.timeControlStatus == .playing {
+            player.pause()
+        } else {
+            player.play()
+            scheduleHideControls()
+        }
     }
 
     @objc private func rewindTapped() {
         let t = CMTimeGetSeconds(player.currentTime())
         player.seek(to: CMTime(seconds: max(0, t - 10), preferredTimescale: 1))
-        scheduleHideControls()
     }
 
     @objc private func forwardTapped() {
         let t = CMTimeGetSeconds(player.currentTime())
         let d = CMTimeGetSeconds(player.currentItem?.duration ?? .zero)
         player.seek(to: CMTime(seconds: min(d, t + 10), preferredTimescale: 1))
-        scheduleHideControls()
     }
 
     @objc private func seekStarted() { isSeeking = true }
@@ -523,15 +525,18 @@ class CustomPlayerViewController: UIViewController {
 
     @objc private func seekEnded() {
         isSeeking = false
-        scheduleHideControls()
     }
 
     @objc private func toggleControls() {
         controlsVisible.toggle()
+        hideControlsTask?.cancel()
         UIView.animate(withDuration: 0.25) {
             self.controlsContainer.alpha = self.controlsVisible ? 1 : 0
         }
-        if controlsVisible { scheduleHideControls() }
+        // Only auto-hide if currently playing
+        if controlsVisible && player.timeControlStatus == .playing {
+            scheduleHideControls()
+        }
     }
 
     private func scheduleHideControls() {
@@ -548,7 +553,6 @@ class CustomPlayerViewController: UIViewController {
 
     @objc private func ccTapped() {
         showPickerPanel(title: "Subtitles", items: buildSubtitleItems())
-        scheduleHideControls()
     }
 
     private func buildSubtitleItems() -> [PickerItem] {
@@ -615,7 +619,6 @@ class CustomPlayerViewController: UIViewController {
             })
         }
         showPickerPanel(title: "Playback Speed", items: items)
-        scheduleHideControls()
     }
 
     // MARK: - Server
@@ -632,7 +635,6 @@ class CustomPlayerViewController: UIViewController {
             })
         }
         showPickerPanel(title: "Server", items: items)
-        scheduleHideControls()
     }
 
     private func setSpeed(_ speed: Float) {
@@ -665,9 +667,7 @@ class CustomPlayerViewController: UIViewController {
     // MARK: - Picker Panel
 
     private func showPickerPanel(title: String, items: [PickerItem]) {
-        let panel = PickerPanelView(title: title, items: items) { [weak self] in
-            self?.scheduleHideControls()
-        }
+        let panel = PickerPanelView(title: title, items: items) { }
         panel.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(panel)
         NSLayoutConstraint.activate([
@@ -678,6 +678,22 @@ class CustomPlayerViewController: UIViewController {
         ])
         panel.alpha = 0
         UIView.animate(withDuration: 0.2) { panel.alpha = 1 }
+    }
+}
+
+// MARK: - Gesture Delegate
+
+extension CustomPlayerViewController: UIGestureRecognizerDelegate {
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        guard let touchView = touch.view else { return true }
+        if touchView is UIButton || touchView is UISlider { return false }
+        // Check if touch hits any interactive control
+        let point = touch.location(in: controlsContainer)
+        if let hit = controlsContainer.hitTest(point, with: nil),
+           hit is UIButton || hit is UISlider {
+            return false
+        }
+        return true
     }
 }
 
