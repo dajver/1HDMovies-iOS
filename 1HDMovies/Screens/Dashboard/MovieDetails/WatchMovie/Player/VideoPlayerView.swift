@@ -113,7 +113,7 @@ class CustomPlayerViewController: UIViewController {
 
     required init?(coder: NSCoder) { fatalError() }
 
-    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .landscape }
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .all }
     override var prefersHomeIndicatorAutoHidden: Bool { true }
     override var prefersStatusBarHidden: Bool { true }
 
