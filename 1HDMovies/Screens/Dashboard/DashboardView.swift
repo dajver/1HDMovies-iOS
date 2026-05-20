@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct DashboardView: View {
-    @State private var viewModel = DashboardViewModel()
+    var viewModel: DashboardViewModel
     @State private var navigationPath = NavigationPath()
     @State private var showAccount = false
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -86,9 +86,6 @@ struct DashboardView: View {
                 case .filter:
                     FilterView()
                 }
-            }
-            .task {
-                await viewModel.fetchAll()
             }
             .sheet(isPresented: $showAccount) {
                 AccountView()

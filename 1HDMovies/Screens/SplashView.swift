@@ -2,10 +2,11 @@ import SwiftUI
 
 struct SplashView: View {
     @State private var isActive = false
+    @State private var viewModel = DashboardViewModel()
 
     var body: some View {
         if isActive {
-            MainTabView()
+            MainTabView(viewModel: viewModel)
         } else {
             ZStack {
                 Color.black.ignoresSafeArea()
@@ -15,7 +16,7 @@ struct SplashView: View {
                     .frame(width: 220)
             }
             .task {
-                try? await Task.sleep(for: .seconds(2))
+                await viewModel.fetchAll()
                 withAnimation { isActive = true }
             }
         }
@@ -23,8 +24,10 @@ struct SplashView: View {
 }
 
 struct MainTabView: View {
+    var viewModel: DashboardViewModel
+
     var body: some View {
-        DashboardView()
+        DashboardView(viewModel: viewModel)
             .preferredColorScheme(.dark)
     }
 }
