@@ -1,11 +1,15 @@
 import SwiftUI
 import WebKit
+import os
+
+private let log = Logger(subsystem: "com.dajver.one.hd", category: "StreamDetector")
 
 struct WatchMovieView: View {
     let movieUrl: String
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel = WatchMovieViewModel()
     @State private var detectedStreamUrl: String?
+    @State private var detectedSubtitles: [SubtitleTrack] = []
 
     private var isPlayerShowing: Bool { detectedStreamUrl != nil }
 
@@ -17,6 +21,7 @@ struct WatchMovieView: View {
                 VideoPlayerView(
                     url: streamUrl,
                     referer: viewModel.embedUrl ?? movieUrl,
+                    subtitles: detectedSubtitles,
                     onClose: { dismiss() }
                 )
                 .ignoresSafeArea()
@@ -25,8 +30,9 @@ struct WatchMovieView: View {
                     StreamDetectorWebView(
                         url: viewModel.embedUrl ?? movieUrl,
                         referer: movieUrl,
-                        onStreamDetected: { streamUrl in
+                        onStreamDetected: { streamUrl, subtitles in
                             if detectedStreamUrl == nil {
+                                detectedSubtitles = subtitles
                                 detectedStreamUrl = streamUrl
                             }
                         }
@@ -56,7 +62,7 @@ struct WatchMovieView: View {
 struct StreamDetectorWebView: UIViewRepresentable {
     let url: String
     let referer: String
-    let onStreamDetected: (String) -> Void
+    let onStreamDetected: (String, [SubtitleTrack]) -> Void
 
     func makeCoordinator() -> Coordinator {
         Coordinator(onStreamDetected: onStreamDetected)
@@ -103,32 +109,116 @@ struct StreamDetectorWebView: UIViewRepresentable {
 
     static let interceptJS = """
     (function() {
-        function reportUrl(url) {
-            if (url && url.indexOf('.m3u8') !== -1) {
-                window.webkit.messageHandlers.streamDetector.postMessage(url);
+        var reportedStreams = {};
+        var reportedSubs = {};
+
+        function reportStream(url) {
+            if (url && url.indexOf('.m3u8') !== -1 && !reportedStreams[url]) {
+                reportedStreams[url] = true;
+                window.webkit.messageHandlers.streamDetector.postMessage(JSON.stringify({type: 'stream', url: url}));
             }
         }
 
+        function reportSub(url, label, lang) {
+            if (url && !reportedSubs[url]) {
+                reportedSubs[url] = true;
+                window.webkit.messageHandlers.streamDetector.postMessage(JSON.stringify({
+                    type: 'subtitle', url: url, label: label || '', lang: lang || ''
+                }));
+            }
+        }
+
+        function scanForSubs(text) {
+            try {
+                // Try parsing as JSON and look for subtitle/track arrays
+                var obj = (typeof text === 'string') ? JSON.parse(text) : text;
+                scanObject(obj);
+            } catch(e) {}
+        }
+
+        function scanObject(obj) {
+            if (!obj || typeof obj !== 'object') return;
+            if (Array.isArray(obj)) {
+                obj.forEach(function(item) { scanObject(item); });
+                return;
+            }
+            // Look for subtitle-like objects: {file/url/src: "...", label/language: "...", kind: "captions/subtitles"}
+            var subUrl = obj.file || obj.url || obj.src || '';
+            var kind = (obj.kind || '').toLowerCase();
+            var label = obj.label || obj.language || obj.lang || '';
+            if (subUrl && (kind === 'captions' || kind === 'subtitles' ||
+                subUrl.indexOf('.vtt') !== -1 || subUrl.indexOf('.srt') !== -1)) {
+                reportSub(subUrl, label, obj.language || obj.lang || '');
+            }
+            // Recurse into known container keys
+            ['tracks', 'subtitles', 'captions', 'subs', 'textTracks', 'sources'].forEach(function(key) {
+                if (obj[key]) scanObject(obj[key]);
+            });
+        }
+
+        // Intercept XHR - both URL and response body
         var origOpen = XMLHttpRequest.prototype.open;
+        var origSend = XMLHttpRequest.prototype.send;
         XMLHttpRequest.prototype.open = function(method, url) {
-            reportUrl(url);
+            this._interceptUrl = url;
+            reportStream(url);
+            if (url && (url.indexOf('.vtt') !== -1 || url.indexOf('.srt') !== -1)) {
+                reportSub(url, '', '');
+            }
             return origOpen.apply(this, arguments);
         };
+        XMLHttpRequest.prototype.send = function() {
+            var xhr = this;
+            xhr.addEventListener('load', function() {
+                try {
+                    var ct = xhr.getResponseHeader('content-type') || '';
+                    if (ct.indexOf('json') !== -1 || (xhr._interceptUrl && xhr._interceptUrl.indexOf('json') !== -1)) {
+                        scanForSubs(xhr.responseText);
+                    }
+                    // Also check if response text contains subtitle URLs
+                    if (xhr.responseText) {
+                        var vttMatches = xhr.responseText.match(/https?:[^"'\\s]+\\.vtt/g);
+                        if (vttMatches) {
+                            vttMatches.forEach(function(u) { reportSub(u, '', ''); });
+                        }
+                    }
+                } catch(e) {}
+            });
+            return origSend.apply(this, arguments);
+        };
 
+        // Intercept fetch - both URL and response body
         var origFetch = window.fetch;
         window.fetch = function(input) {
             var url = (typeof input === 'string') ? input : (input && input.url ? input.url : '');
-            reportUrl(url);
-            return origFetch.apply(this, arguments);
+            reportStream(url);
+            if (url && (url.indexOf('.vtt') !== -1 || url.indexOf('.srt') !== -1)) {
+                reportSub(url, '', '');
+            }
+            return origFetch.apply(this, arguments).then(function(response) {
+                var clone = response.clone();
+                clone.text().then(function(text) {
+                    try {
+                        scanForSubs(text);
+                        var vttMatches = text.match(/https?:[^"'\\s]+\\.vtt/g);
+                        if (vttMatches) {
+                            vttMatches.forEach(function(u) { reportSub(u, '', ''); });
+                        }
+                    } catch(e) {}
+                }).catch(function(){});
+                return response;
+            });
         };
 
+        // Intercept createElement for video/source/track
         var origCreateElement = document.createElement.bind(document);
         document.createElement = function(tag) {
             var el = origCreateElement(tag);
-            if (tag.toLowerCase() === 'video' || tag.toLowerCase() === 'source') {
+            var tagLower = tag.toLowerCase();
+            if (tagLower === 'video' || tagLower === 'source') {
                 var origSetAttr = el.setAttribute.bind(el);
                 el.setAttribute = function(name, value) {
-                    if (name === 'src') { reportUrl(value); }
+                    if (name === 'src') { reportStream(value); }
                     return origSetAttr(name, value);
                 };
                 var descriptor = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'src') ||
@@ -136,59 +226,108 @@ struct StreamDetectorWebView: UIViewRepresentable {
                 if (descriptor && descriptor.set) {
                     var origSet = descriptor.set;
                     Object.defineProperty(el, 'src', {
-                        set: function(v) { reportUrl(v); return origSet.call(this, v); },
+                        set: function(v) { reportStream(v); return origSet.call(this, v); },
                         get: descriptor.get
                     });
                 }
             }
+            if (tagLower === 'track') {
+                var origSetAttr2 = el.setAttribute.bind(el);
+                el.setAttribute = function(name, value) {
+                    if (name === 'src') { reportSub(value, '', ''); }
+                    return origSetAttr2(name, value);
+                };
+            }
             return el;
         };
 
-        function checkVideos() {
+        // Periodic scan of DOM and player APIs
+        function fullScan() {
+            // Video sources
             document.querySelectorAll('video').forEach(function(v) {
-                if (v.src) reportUrl(v.src);
+                if (v.src) reportStream(v.src);
                 v.querySelectorAll('source').forEach(function(s) {
-                    if (s.src) reportUrl(s.src);
+                    if (s.src) reportStream(s.src);
                 });
+            });
+            // Track elements
+            document.querySelectorAll('track').forEach(function(t) {
+                if (t.src) reportSub(t.src, t.label || '', t.srclang || '');
+            });
+            // JWPlayer
+            if (typeof jwplayer !== 'undefined') {
+                try {
+                    var cfg = jwplayer().getConfig();
+                    if (cfg && cfg.tracks) scanObject({tracks: cfg.tracks});
+                    var playlist = jwplayer().getPlaylist();
+                    if (playlist) playlist.forEach(function(item) {
+                        if (item.tracks) scanObject({tracks: item.tracks});
+                    });
+                } catch(e) {}
+            }
+            // Video.js
+            var vjsEl = document.querySelector('.video-js');
+            if (vjsEl && vjsEl.player) {
+                try {
+                    var tt = vjsEl.player.textTracks();
+                    for (var i = 0; i < tt.length; i++) {
+                        if (tt[i].src) reportSub(tt[i].src, tt[i].label || '', tt[i].language || '');
+                    }
+                } catch(e) {}
+            }
+            // Scan all script tags for VTT URLs
+            document.querySelectorAll('script').forEach(function(s) {
+                if (s.textContent) {
+                    var matches = s.textContent.match(/https?:[^"'\\s]+\\.vtt/g);
+                    if (matches) matches.forEach(function(u) {
+                        reportSub(u.replace(/\\\\/g, ''), '', '');
+                    });
+                }
             });
         }
-        var observer = new MutationObserver(function(mutations) {
-            checkVideos();
-            mutations.forEach(function(m) {
-                m.addedNodes.forEach(function(node) {
-                    if (node.tagName === 'VIDEO' || node.tagName === 'SOURCE') {
-                        if (node.src) reportUrl(node.src);
-                    }
-                    if (node.querySelectorAll) {
-                        node.querySelectorAll('video, source').forEach(function(el) {
-                            if (el.src) reportUrl(el.src);
-                        });
-                    }
-                });
-            });
-        });
-        observer.observe(document.documentElement, { childList: true, subtree: true });
 
-        setInterval(checkVideos, 2000);
+        var observer = new MutationObserver(function() { fullScan(); });
+        observer.observe(document.documentElement, { childList: true, subtree: true });
+        setInterval(fullScan, 2000);
     })();
     """
 
     class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
-        let onStreamDetected: (String) -> Void
+        let onStreamDetected: (String, [SubtitleTrack]) -> Void
         weak var webView: WKWebView?
         private var hasDetectedStream = false
         private var sourceList: [String] = []
+        private var subtitleList: [String: SubtitleTrack] = [:]
         private var debounceTask: Task<Void, Never>?
 
-        init(onStreamDetected: @escaping (String) -> Void) {
+        init(onStreamDetected: @escaping (String, [SubtitleTrack]) -> Void) {
             self.onStreamDetected = onStreamDetected
         }
 
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
             guard message.name == "streamDetector",
-                  let urlString = message.body as? String,
-                  urlString.contains(".m3u8") else { return }
-            handleStreamUrl(urlString)
+                  let jsonString = message.body as? String,
+                  let data = jsonString.data(using: .utf8),
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let type = json["type"] as? String,
+                  let url = json["url"] as? String else { return }
+
+            log.info("JS message: type=\(type) url=\(url.prefix(100))")
+
+            if type == "stream" {
+                handleStreamUrl(url)
+            } else if type == "subtitle" {
+                let label = json["label"] as? String ?? ""
+                let lang = json["lang"] as? String ?? ""
+                log.info("Subtitle detected: label=\(label) lang=\(lang) url=\(url)")
+                if subtitleList[url] == nil {
+                    subtitleList[url] = SubtitleTrack(
+                        label: label.isEmpty ? (lang.isEmpty ? "Unknown" : lang) : label,
+                        url: url,
+                        language: lang
+                    )
+                }
+            }
         }
 
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
@@ -212,10 +351,12 @@ struct StreamDetectorWebView: UIViewRepresentable {
             }
             debounceTask?.cancel()
             debounceTask = Task { @MainActor in
-                try? await Task.sleep(for: .seconds(2))
+                // Wait for subtitles to also be detected
+                try? await Task.sleep(for: .seconds(3))
                 guard !Task.isCancelled, !self.sourceList.isEmpty, !self.hasDetectedStream else { return }
                 self.hasDetectedStream = true
-                self.onStreamDetected(self.sourceList.first!)
+                log.info("Final report: stream=\(self.sourceList.first!) subtitles=\(self.subtitleList.count)")
+                self.onStreamDetected(self.sourceList.first!, Array(self.subtitleList.values))
             }
         }
 
