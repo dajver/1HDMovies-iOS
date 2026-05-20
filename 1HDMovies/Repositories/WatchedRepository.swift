@@ -19,8 +19,10 @@ class WatchedRepository {
     func toggleWatched(linkToDetails: String) {
         if isWatched(linkToDetails: linkToDetails) {
             removeWatched(linkToDetails: linkToDetails)
+            Task { await FirebaseSyncService.shared.deleteWatchedStatus(linkToDetails: linkToDetails) }
         } else {
             markWatched(linkToDetails: linkToDetails)
+            Task { await FirebaseSyncService.shared.uploadWatchedStatus(linkToDetails: linkToDetails) }
         }
     }
 

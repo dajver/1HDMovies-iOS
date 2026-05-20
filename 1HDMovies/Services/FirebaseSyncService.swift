@@ -46,6 +46,9 @@ final class FirebaseSyncService {
             try await uploadNewFavorites(uid: uid)
             try await downloadFavorites(uid: uid)
             try await syncDeletedFavorites(uid: uid)
+            try await uploadWatched(uid: uid)
+            try await downloadWatched(uid: uid)
+            try await syncDeletedWatched(uid: uid)
             log.info("Full sync completed")
         } catch {
             log.error("Sync failed: \(error.localizedDescription)")
@@ -182,6 +185,99 @@ final class FirebaseSyncService {
             if !localLinks.contains(linkToDetails) {
                 try await doc.reference.delete()
                 log.info("Deleted orphaned cloud favorite: \(linkToDetails)")
+            }
+        }
+    }
+
+    // MARK: - Watched Upload/Delete
+
+    func uploadWatchedStatus(linkToDetails: String) async {
+        guard let uid else { return }
+        do {
+            try await db.collection("users").document(uid)
+                .collection("watched").document(linkToDetails.hash.description)
+                .setData(["linkToDetails": linkToDetails, "watchedAt": Timestamp(date: Date())])
+            log.info("Uploaded watched: \(linkToDetails)")
+        } catch {
+            log.error("Failed to upload watched: \(error.localizedDescription)")
+        }
+    }
+
+    func deleteWatchedStatus(linkToDetails: String) async {
+        guard let uid else { return }
+        do {
+            let snapshot = try await db.collection("users").document(uid)
+                .collection("watched")
+                .whereField("linkToDetails", isEqualTo: linkToDetails)
+                .getDocuments()
+            for doc in snapshot.documents {
+                try await doc.reference.delete()
+            }
+            log.info("Deleted watched: \(linkToDetails)")
+        } catch {
+            log.error("Failed to delete watched: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - Watched Sync
+
+    private func uploadWatched(uid: String) async throws {
+        guard let context = WatchedRepository.shared.modelContext else { return }
+        let allWatched = (try? context.fetch(FetchDescriptor<WatchedMovie>())) ?? []
+        let snapshot = try await db.collection("users").document(uid)
+            .collection("watched").getDocuments()
+        let cloudLinks = Set(snapshot.documents.compactMap { $0.data()["linkToDetails"] as? String })
+
+        var uploaded = 0
+        for item in allWatched {
+            if !cloudLinks.contains(item.linkToDetails) {
+                try await db.collection("users").document(uid)
+                    .collection("watched").addDocument(data: [
+                        "linkToDetails": item.linkToDetails,
+                        "watchedAt": Timestamp(date: item.watchedAt)
+                    ])
+                uploaded += 1
+            }
+        }
+        log.info("Uploaded \(uploaded) watched items")
+    }
+
+    private func downloadWatched(uid: String) async throws {
+        guard let context = WatchedRepository.shared.modelContext else { return }
+        let snapshot = try await db.collection("users").document(uid)
+            .collection("watched").getDocuments()
+        let allLocal = (try? context.fetch(FetchDescriptor<WatchedMovie>())) ?? []
+        let localLinks = Set(allLocal.map { $0.linkToDetails })
+
+        var downloaded = 0
+        for doc in snapshot.documents {
+            let data = doc.data()
+            guard let link = data["linkToDetails"] as? String else { continue }
+            if !localLinks.contains(link) {
+                let item = WatchedMovie(linkToDetails: link)
+                if let ts = data["watchedAt"] as? Timestamp {
+                    item.watchedAt = ts.dateValue()
+                }
+                context.insert(item)
+                downloaded += 1
+            }
+        }
+        if downloaded > 0 { try? context.save() }
+        log.info("Downloaded \(downloaded) watched items")
+    }
+
+    private func syncDeletedWatched(uid: String) async throws {
+        guard let context = WatchedRepository.shared.modelContext else { return }
+        let snapshot = try await db.collection("users").document(uid)
+            .collection("watched").getDocuments()
+        let allLocal = (try? context.fetch(FetchDescriptor<WatchedMovie>())) ?? []
+        let localLinks = Set(allLocal.map { $0.linkToDetails })
+
+        for doc in snapshot.documents {
+            guard let link = doc.data()["linkToDetails"] as? String else { continue }
+            if !localLinks.contains(link) {
+                try await doc.reference.delete()
+                log.info("Deleted orphaned cloud watched: \(link)")
             }
         }
     }
