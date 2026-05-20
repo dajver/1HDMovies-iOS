@@ -46,4 +46,14 @@ class MovieDetailsViewModel {
         guard let movie = movieDetails else { return false }
         return FavoriteRepository.shared.hasMovie(movie)
     }
+
+    func toggleWatched() {
+        guard let movie = movieDetails else { return }
+        WatchedRepository.shared.toggleWatched(linkToDetails: movie.linkToDetails)
+    }
+
+    func isWatched() -> Bool {
+        guard let movie = movieDetails else { return false }
+        return WatchedRepository.shared.isWatched(linkToDetails: movie.linkToDetails)
+    }
 }

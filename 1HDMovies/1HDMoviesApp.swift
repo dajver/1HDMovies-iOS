@@ -22,7 +22,7 @@ struct onehdApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
 
     var sharedModelContainer: ModelContainer = {
-        let schema = Schema([FavoriteMovie.self])
+        let schema = Schema([FavoriteMovie.self, WatchedMovie.self])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
         do {
             return try ModelContainer(for: schema, configurations: [config])
@@ -37,6 +37,7 @@ struct onehdApp: App {
                 .onAppear {
                     let context = sharedModelContainer.mainContext
                     FavoriteRepository.shared.modelContext = context
+                    WatchedRepository.shared.modelContext = context
                     FavoriteMigration.migrateIfNeeded(modelContext: context)
                 }
                 .task {

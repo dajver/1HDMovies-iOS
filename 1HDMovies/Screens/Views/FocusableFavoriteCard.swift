@@ -8,23 +8,36 @@ struct FocusableFavoriteCard: View {
     @Environment(\.isFocused) private var isFocused
 
     private var isHighlighted: Bool { isFocused || isHovered }
+    private var isWatched: Bool { WatchedRepository.shared.isWatched(linkToDetails: movie.linkToDetails) }
 
     var body: some View {
         NavigationLink(value: Route.movieDetails(url: movie.linkToDetails)) {
             VStack(alignment: .leading, spacing: 4) {
-                AsyncImage(url: URL(string: movie.thumbnail)) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(height: cardHeight)
-                            .clipped()
-                            .cornerRadius(8)
-                    default:
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.gray.opacity(0.3))
-                            .frame(height: cardHeight)
+                ZStack(alignment: .topTrailing) {
+                    AsyncImage(url: URL(string: movie.thumbnail)) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(height: cardHeight)
+                                .clipped()
+                                .cornerRadius(8)
+                        default:
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(Color.gray.opacity(0.3))
+                                .frame(height: cardHeight)
+                        }
+                    }
+
+                    if isWatched {
+                        Image(systemName: "eye.fill")
+                            .font(.caption2)
+                            .foregroundColor(.white)
+                            .padding(5)
+                            .background(Color.green.opacity(0.85))
+                            .clipShape(Circle())
+                            .padding(6)
                     }
                 }
                 Text(movie.name)

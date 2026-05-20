@@ -4,6 +4,7 @@ struct MovieDetailsView: View {
     let movieUrl: String
     @State private var viewModel = MovieDetailsViewModel()
     @State private var isFavorite = false
+    @State private var isWatched = false
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     private var isRegular: Bool { horizontalSizeClass == .regular }
@@ -26,6 +27,7 @@ struct MovieDetailsView: View {
         .task {
             await viewModel.fetchDetails(url: movieUrl)
             isFavorite = viewModel.isFavorite()
+            isWatched = viewModel.isWatched()
             await viewModel.fetchYouMayAlsoLike(url: movieUrl)
         }
     }
@@ -94,21 +96,7 @@ struct MovieDetailsView: View {
                             }
                         }
 
-                        Button {
-                            viewModel.toggleFavorite()
-                            isFavorite = viewModel.isFavorite()
-                        } label: {
-                            HStack {
-                                Image(systemName: isFavorite ? "heart.fill" : "heart")
-                                Text(isFavorite ? "Remove" : "Favorite")
-                            }
-                            .font(.headline)
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 32)
-                            .padding(.vertical, 12)
-                            .background(isFavorite ? Color.gray : Color.blue)
-                            .cornerRadius(12)
-                        }
+                        actionButtons
                     }
                     .padding(.top, 8)
                 }
@@ -196,22 +184,8 @@ struct MovieDetailsView: View {
                 .padding(.horizontal)
             }
 
-            Button {
-                viewModel.toggleFavorite()
-                isFavorite = viewModel.isFavorite()
-            } label: {
-                HStack {
-                    Image(systemName: isFavorite ? "heart.fill" : "heart")
-                    Text(isFavorite ? "Remove from Favorites" : "Add to Favorites")
-                }
-                .font(.headline)
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(isFavorite ? Color.gray : Color.blue)
-                .cornerRadius(12)
-            }
-            .padding(.horizontal)
+            actionButtons
+                .padding(.horizontal)
 
             if let seasons = movie.seasonsList, !seasons.isEmpty {
                 seasonsSection(seasons: seasons)
@@ -220,6 +194,44 @@ struct MovieDetailsView: View {
             youMayAlsoLikeSection()
         }
         .padding(.vertical)
+    }
+
+    // MARK: - Action Buttons
+
+    private var actionButtons: some View {
+        HStack(spacing: 12) {
+            Button {
+                viewModel.toggleFavorite()
+                isFavorite = viewModel.isFavorite()
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: isFavorite ? "heart.fill" : "heart")
+                    Text(isFavorite ? "Favorited" : "Favorite")
+                }
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(isFavorite ? Color.red.opacity(0.8) : Color.blue)
+                .cornerRadius(10)
+            }
+
+            Button {
+                viewModel.toggleWatched()
+                isWatched = viewModel.isWatched()
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: isWatched ? "eye.fill" : "eye.slash")
+                    Text(isWatched ? "Watched" : "Not Watched")
+                }
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(isWatched ? Color.green.opacity(0.8) : Color.gray.opacity(0.5))
+                .cornerRadius(10)
+            }
+        }
     }
 
     // MARK: - Shared sections

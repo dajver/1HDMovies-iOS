@@ -2,6 +2,7 @@ import SwiftUI
 
 struct FavoriteView: View {
     @State private var viewModel = FavoriteViewModel()
+    @State private var refreshId = UUID()
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     private var columns: [GridItem] {
@@ -30,6 +31,7 @@ struct FavoriteView: View {
                     LazyVGrid(columns: columns, spacing: 16) {
                         ForEach(viewModel.favorites) { movie in
                             FocusableFavoriteCard(movie: movie, cardHeight: cardHeight)
+                                .id("\(movie.id)-\(refreshId)")
                         }
                     }
                     .padding()
@@ -41,6 +43,7 @@ struct FavoriteView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             viewModel.fetchFavorites()
+            refreshId = UUID()
         }
     }
 }
