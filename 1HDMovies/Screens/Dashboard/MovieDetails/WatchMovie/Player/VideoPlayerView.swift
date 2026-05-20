@@ -9,7 +9,10 @@ struct VideoPlayerView: View {
     let url: String
     let referer: String
     var subtitles: [SubtitleTrack] = []
+    var episodes: [MovieEpisodesDataModel] = []
+    var currentEpisodeIndex: Int = 0
     let onClose: () -> Void
+    var onEpisodeChange: ((Int) -> Void)?
 
     @State private var presented = false
 
@@ -40,7 +43,14 @@ struct VideoPlayerView: View {
         let playerItem = AVPlayerItem(asset: asset)
         let player = AVPlayer(playerItem: playerItem)
 
-        let playerVC = CustomPlayerViewController(player: player, subtitles: subtitles, onClose: onClose)
+        let playerVC = CustomPlayerViewController(
+            player: player,
+            subtitles: subtitles,
+            episodes: episodes,
+            currentEpisodeIndex: currentEpisodeIndex,
+            onClose: onClose,
+            onEpisodeChange: onEpisodeChange
+        )
         playerVC.modalPresentationStyle = .fullScreen
 
         guard let windowScene = UIApplication.shared.connectedScenes
@@ -64,7 +74,10 @@ struct VideoPlayerView: View {
 class CustomPlayerViewController: UIViewController {
     private let player: AVPlayer
     private let subtitles: [SubtitleTrack]
+    private let episodes: [MovieEpisodesDataModel]
+    private let currentEpisodeIndex: Int
     private let onClose: () -> Void
+    private let onEpisodeChange: ((Int) -> Void)?
 
     // Video layer
     private var playerLayer: AVPlayerLayer!
@@ -72,6 +85,7 @@ class CustomPlayerViewController: UIViewController {
     // Controls
     private let controlsContainer = UIView()
     private let topBar = UIView()
+    private let episodeLabel = UILabel()
     private let playPauseButton = UIButton(type: .system)
     private let seekBar = UISlider()
     private let currentTimeLabel = UILabel()
@@ -79,6 +93,8 @@ class CustomPlayerViewController: UIViewController {
     private let closeButton = UIButton(type: .system)
     private let rewindButton = UIButton(type: .system)
     private let forwardButton = UIButton(type: .system)
+    private let prevEpisodeButton = UIButton(type: .system)
+    private let nextEpisodeButton = UIButton(type: .system)
 
     // Bottom options row (below seek bar)
     private let subtitlesButton = UIButton(type: .system)
@@ -104,10 +120,14 @@ class CustomPlayerViewController: UIViewController {
     private var statusObservation: NSKeyValueObservation?
     private var timeControlObservation: NSKeyValueObservation?
 
-    init(player: AVPlayer, subtitles: [SubtitleTrack], onClose: @escaping () -> Void) {
+    init(player: AVPlayer, subtitles: [SubtitleTrack], episodes: [MovieEpisodesDataModel],
+         currentEpisodeIndex: Int, onClose: @escaping () -> Void, onEpisodeChange: ((Int) -> Void)?) {
         self.player = player
         self.subtitles = subtitles
+        self.episodes = episodes
+        self.currentEpisodeIndex = currentEpisodeIndex
         self.onClose = onClose
+        self.onEpisodeChange = onEpisodeChange
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -209,20 +229,53 @@ class CustomPlayerViewController: UIViewController {
             closeButton.heightAnchor.constraint(equalToConstant: 44)
         ])
 
-        // Center controls
-        let centerStack = UIStackView(arrangedSubviews: [rewindButton, playPauseButton, forwardButton])
-        centerStack.axis = .horizontal
-        centerStack.spacing = 48
-        centerStack.alignment = .center
-        centerStack.translatesAutoresizingMaskIntoConstraints = false
+        // Episode label (top bar, center)
+        if !episodes.isEmpty {
+            let ep = episodes[currentEpisodeIndex]
+            episodeLabel.text = ep.episodeName.isEmpty ? ep.episodeNumber : "\(ep.episodeNumber) - \(ep.episodeName)"
+            episodeLabel.font = .systemFont(ofSize: 15, weight: .medium)
+            episodeLabel.textColor = .white
+            episodeLabel.textAlignment = .center
+            episodeLabel.translatesAutoresizingMaskIntoConstraints = false
+            topBar.addSubview(episodeLabel)
+            NSLayoutConstraint.activate([
+                episodeLabel.centerXAnchor.constraint(equalTo: topBar.centerXAnchor),
+                episodeLabel.centerYAnchor.constraint(equalTo: topBar.centerYAnchor),
+                episodeLabel.leadingAnchor.constraint(greaterThanOrEqualTo: closeButton.trailingAnchor, constant: 8),
+                episodeLabel.trailingAnchor.constraint(lessThanOrEqualTo: topBar.trailingAnchor, constant: -52)
+            ])
+        }
 
+        // Center controls
+        let hasEpisodes = episodes.count > 1
+
+        configureSymbolButton(prevEpisodeButton, systemName: "backward.end.fill", size: 24)
         configureSymbolButton(rewindButton, systemName: "gobackward.10", size: 28)
         configureSymbolButton(playPauseButton, systemName: "pause.fill", size: 36)
         configureSymbolButton(forwardButton, systemName: "goforward.10", size: 28)
+        configureSymbolButton(nextEpisodeButton, systemName: "forward.end.fill", size: 24)
 
+        prevEpisodeButton.addTarget(self, action: #selector(prevEpisodeTapped), for: .touchUpInside)
         rewindButton.addTarget(self, action: #selector(rewindTapped), for: .touchUpInside)
         playPauseButton.addTarget(self, action: #selector(playPauseTapped), for: .touchUpInside)
         forwardButton.addTarget(self, action: #selector(forwardTapped), for: .touchUpInside)
+        nextEpisodeButton.addTarget(self, action: #selector(nextEpisodeTapped), for: .touchUpInside)
+
+        prevEpisodeButton.isEnabled = currentEpisodeIndex > 0
+        prevEpisodeButton.alpha = currentEpisodeIndex > 0 ? 1.0 : 0.3
+        nextEpisodeButton.isEnabled = currentEpisodeIndex < episodes.count - 1
+        nextEpisodeButton.alpha = currentEpisodeIndex < episodes.count - 1 ? 1.0 : 0.3
+
+        var centerItems: [UIView] = []
+        if hasEpisodes { centerItems.append(prevEpisodeButton) }
+        centerItems.append(contentsOf: [rewindButton, playPauseButton, forwardButton])
+        if hasEpisodes { centerItems.append(nextEpisodeButton) }
+
+        let centerStack = UIStackView(arrangedSubviews: centerItems)
+        centerStack.axis = .horizontal
+        centerStack.spacing = hasEpisodes ? 32 : 48
+        centerStack.alignment = .center
+        centerStack.translatesAutoresizingMaskIntoConstraints = false
 
         controlsContainer.addSubview(centerStack)
         NSLayoutConstraint.activate([
@@ -372,6 +425,18 @@ class CustomPlayerViewController: UIViewController {
     @objc private func closeTapped() {
         player.pause()
         dismiss(animated: true) { self.onClose() }
+    }
+
+    @objc private func prevEpisodeTapped() {
+        guard currentEpisodeIndex > 0 else { return }
+        player.pause()
+        dismiss(animated: true) { self.onEpisodeChange?(self.currentEpisodeIndex - 1) }
+    }
+
+    @objc private func nextEpisodeTapped() {
+        guard currentEpisodeIndex < episodes.count - 1 else { return }
+        player.pause()
+        dismiss(animated: true) { self.onEpisodeChange?(self.currentEpisodeIndex + 1) }
     }
 
     @objc private func playPauseTapped() {

@@ -309,8 +309,8 @@ struct MovieDetailsView: View {
 
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        ForEach(viewModel.selectedEpisodes) { episode in
-                            NavigationLink(value: Route.watchMovie(url: episode.link)) {
+                        ForEach(Array(viewModel.selectedEpisodes.enumerated()), id: \.element.id) { index, episode in
+                            NavigationLink(value: Route.watchEpisode(episodes: viewModel.selectedEpisodes, currentIndex: index)) {
                                 FocusableEpisodeChip(
                                     episodeNumber: episode.episodeNumber,
                                     episodeName: episode.episodeName

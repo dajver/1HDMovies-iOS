@@ -73,6 +73,8 @@ struct DashboardView: View {
                     MovieDetailsView(movieUrl: url)
                 case .watchMovie(let url):
                     WatchMovieView(movieUrl: url)
+                case .watchEpisode(let episodes, let currentIndex):
+                    WatchMovieView(movieUrl: episodes[currentIndex].link, episodes: episodes, currentEpisodeIndex: currentIndex)
                 case .allMovies:
                     AllMoviesView()
                 case .allTvShows:
@@ -130,6 +132,7 @@ struct DashboardView: View {
 enum Route: Hashable {
     case movieDetails(url: String)
     case watchMovie(url: String)
+    case watchEpisode(episodes: [MovieEpisodesDataModel], currentIndex: Int)
     case allMovies
     case allTvShows
     case genre(GenresEnum)

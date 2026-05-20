@@ -6,10 +6,15 @@ private let log = Logger(subsystem: "com.dajver.one.hd", category: "StreamDetect
 
 struct WatchMovieView: View {
     let movieUrl: String
+    var episodes: [MovieEpisodesDataModel] = []
+    var currentEpisodeIndex: Int = 0
+
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel = WatchMovieViewModel()
     @State private var detectedStreamUrl: String?
     @State private var detectedSubtitles: [SubtitleTrack] = []
+    @State private var activeEpisodeIndex: Int = 0
+    @State private var activeMovieUrl: String = ""
 
     private var isPlayerShowing: Bool { detectedStreamUrl != nil }
 
@@ -20,16 +25,22 @@ struct WatchMovieView: View {
             if let streamUrl = detectedStreamUrl {
                 VideoPlayerView(
                     url: streamUrl,
-                    referer: viewModel.embedUrl ?? movieUrl,
+                    referer: viewModel.embedUrl ?? activeMovieUrl,
                     subtitles: detectedSubtitles,
-                    onClose: { dismiss() }
+                    episodes: episodes,
+                    currentEpisodeIndex: activeEpisodeIndex,
+                    onClose: { dismiss() },
+                    onEpisodeChange: { index in
+                        loadEpisode(at: index)
+                    }
                 )
                 .ignoresSafeArea()
+                .id(streamUrl) // Force recreate player when stream changes
             } else {
                 if !viewModel.isLoading {
                     StreamDetectorWebView(
-                        url: viewModel.embedUrl ?? movieUrl,
-                        referer: movieUrl,
+                        url: viewModel.embedUrl ?? activeMovieUrl,
+                        referer: activeMovieUrl,
                         onStreamDetected: { streamUrl, subtitles in
                             if detectedStreamUrl == nil {
                                 detectedSubtitles = subtitles
@@ -53,8 +64,25 @@ struct WatchMovieView: View {
         }
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarHidden(isPlayerShowing)
+        .onAppear {
+            activeEpisodeIndex = currentEpisodeIndex
+            activeMovieUrl = movieUrl
+        }
         .task {
             await viewModel.fetchEmbedUrl(watchUrl: movieUrl)
+        }
+    }
+
+    private func loadEpisode(at index: Int) {
+        guard index >= 0, index < episodes.count else { return }
+        activeEpisodeIndex = index
+        activeMovieUrl = episodes[index].link
+        detectedStreamUrl = nil
+        detectedSubtitles = []
+        viewModel.embedUrl = nil
+        viewModel.isLoading = true
+        Task {
+            await viewModel.fetchEmbedUrl(watchUrl: episodes[index].link)
         }
     }
 }
