@@ -4,6 +4,7 @@ import Foundation
 class FavoriteViewModel {
     var favorites: [MoviesDetailsDataModel] = []
 
+    @MainActor
     func fetchFavorites() {
         favorites = FavoriteRepository.shared.fetchAllFavorites()
     }

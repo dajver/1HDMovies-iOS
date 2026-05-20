@@ -3,6 +3,7 @@ import SwiftUI
 struct DashboardView: View {
     @State private var viewModel = DashboardViewModel()
     @State private var navigationPath = NavigationPath()
+    @State private var showAccount = false
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     private var isRegular: Bool { horizontalSizeClass == .regular }
@@ -57,6 +58,12 @@ struct DashboardView: View {
                             Image(systemName: "heart.fill")
                                 .foregroundColor(.red)
                         }
+                        Button {
+                            showAccount = true
+                        } label: {
+                            Image(systemName: "person.circle")
+                                .foregroundColor(.white)
+                        }
                     }
                 }
             }
@@ -82,6 +89,9 @@ struct DashboardView: View {
             }
             .task {
                 await viewModel.fetchAll()
+            }
+            .sheet(isPresented: $showAccount) {
+                AccountView()
             }
         }
     }
