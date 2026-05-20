@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SearchView: View {
     @State private var viewModel = SearchViewModel()
+    @FocusState private var isSearchFocused: Bool
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     private var columns: [GridItem] {
@@ -17,6 +18,7 @@ struct SearchView: View {
                 Image(systemName: "magnifyingglass")
                     .foregroundColor(.gray)
                 TextField("Search movies, TV shows...", text: $viewModel.searchText)
+                    .focused($isSearchFocused)
                     .foregroundColor(.white)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
@@ -60,5 +62,8 @@ struct SearchView: View {
         .background(Color.black)
         .navigationTitle("Search")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            isSearchFocused = true
+        }
     }
 }
