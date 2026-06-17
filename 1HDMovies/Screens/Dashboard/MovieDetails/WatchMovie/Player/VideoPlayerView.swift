@@ -121,7 +121,7 @@ class CustomPlayerViewController: UIViewController {
 
     // Speed
     private var currentSpeed: Float = 1.0
-    private let speeds: [Float] = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
+    private let speeds: [Float] = [0.5, 1.0, 1.5, 2.0]
 
     // Controls visibility
     private var controlsVisible = true
