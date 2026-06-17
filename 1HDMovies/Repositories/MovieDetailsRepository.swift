@@ -11,7 +11,7 @@ class MovieDetailsRepository {
         let type: MovieType = linkToMovieDetails.contains("movie") ? .movie : .tvShow
         let movieDetails = try doc.select("div.detail-elements")
         let thumbnail = try movieDetails.select("img.film-thumbnail-img").attr("src")
-        let title = try movieDetails.select("h3.heading-xl").text()
+        let title = try movieDetails.select(".heading-xl").text()
         let quality = try movieDetails.select("div.quality").text()
         let linkToWatch = try movieDetails.select("div.div-buttons").select("a").attr("href")
         let description = try movieDetails.select("div.description").text()

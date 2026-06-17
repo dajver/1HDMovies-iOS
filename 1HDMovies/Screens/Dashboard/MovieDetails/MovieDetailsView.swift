@@ -10,19 +10,22 @@ struct MovieDetailsView: View {
     private var isRegular: Bool { horizontalSizeClass == .regular }
 
     var body: some View {
-        ScrollView {
-            if viewModel.isLoading {
-                ProgressView()
-                    .padding(.top, 100)
-            } else if let movie = viewModel.movieDetails {
-                if isRegular {
-                    iPadLayout(movie: movie)
-                } else {
-                    iPhoneLayout(movie: movie)
+        VStack(spacing: 0) {
+            ScrollView {
+                if viewModel.isLoading {
+                    ProgressView()
+                        .padding(.top, 100)
+                } else if let movie = viewModel.movieDetails {
+                    if isRegular {
+                        iPadLayout(movie: movie)
+                    } else {
+                        iPhoneLayout(movie: movie)
+                    }
                 }
             }
         }
         .background(Color.black)
+        .navigationTitle(viewModel.movieDetails?.name ?? "")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             viewModel.refreshWatchedEpisodes()
