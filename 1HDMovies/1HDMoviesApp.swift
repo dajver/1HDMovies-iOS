@@ -22,7 +22,8 @@ struct onehdApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
 
     var sharedModelContainer: ModelContainer = {
-        let schema = Schema([FavoriteMovie.self, WatchedMovie.self, WatchedEpisode.self])
+        let schema = Schema([FavoriteMovie.self, WatchedMovie.self, WatchedEpisode.self,
+                             ShowEpisodeSnapshot.self, ShowNotification.self])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
         do {
             return try ModelContainer(for: schema, configurations: [config])
@@ -39,12 +40,14 @@ struct onehdApp: App {
                     FavoriteRepository.shared.modelContext = context
                     WatchedRepository.shared.modelContext = context
                     WatchedEpisodeRepository.shared.modelContext = context
+                    NewEpisodeService.shared.modelContext = context
                     FavoriteMigration.migrateIfNeeded(modelContext: context)
                 }
                 .task {
                     if AuthenticationService.shared.isSignedIn {
                         await FirebaseSyncService.shared.syncAll()
                     }
+                    await NewEpisodeService.shared.checkForNewEpisodes()
                 }
         }
         .modelContainer(sharedModelContainer)

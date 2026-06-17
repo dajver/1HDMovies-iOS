@@ -4,6 +4,8 @@ struct DashboardView: View {
     var viewModel: DashboardViewModel
     @State private var navigationPath = NavigationPath()
     @State private var showAccount = false
+    @State private var continueWatching = ContinueWatchingViewModel()
+    var notificationService = NewEpisodeService.shared
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     private var isRegular: Bool { horizontalSizeClass == .regular }
@@ -20,6 +22,8 @@ struct DashboardView: View {
                             navigationPath.append(Route.watchMovie(url: movie.link))
                         }
                     }
+
+                    continueWatchingRow
 
                     if viewModel.isLoading {
                         ProgressView()
@@ -54,6 +58,22 @@ struct DashboardView: View {
                             Image(systemName: "magnifyingglass")
                                 .foregroundColor(.white)
                         }
+                        NavigationLink(value: Route.notifications) {
+                            Image(systemName: "bell.fill")
+                                .foregroundColor(.white)
+                                .overlay(alignment: .topTrailing) {
+                                    if notificationService.unreadCount > 0 {
+                                        Text("\(min(notificationService.unreadCount, 99))")
+                                            .font(.system(size: 10, weight: .bold))
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 4)
+                                            .padding(.vertical, 1)
+                                            .background(Color.red)
+                                            .clipShape(Capsule())
+                                            .offset(x: 8, y: -8)
+                                    }
+                                }
+                        }
                         NavigationLink(value: Route.favorites) {
                             Image(systemName: "heart.fill")
                                 .foregroundColor(.red)
@@ -87,12 +107,41 @@ struct DashboardView: View {
                     FavoriteView()
                 case .watched:
                     WatchedView()
+                case .notifications:
+                    NotificationsView()
                 case .filter:
                     FilterView()
                 }
             }
             .sheet(isPresented: $showAccount) {
                 AccountView()
+            }
+            .onAppear {
+                notificationService.refresh()
+                continueWatching.refresh()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var continueWatchingRow: some View {
+        if !continueWatching.items.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Continue Watching")
+                    .font(isRegular ? .title3 : .headline)
+                    .foregroundColor(.white)
+                    .padding(.horizontal)
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: isRegular ? 16 : 12) {
+                        ForEach(continueWatching.items) { item in
+                            ContinueWatchingCard(item: item,
+                                                 width: isRegular ? 180 : 140,
+                                                 height: isRegular ? 260 : 200)
+                        }
+                    }
+                    .padding(.horizontal)
+                }
             }
         }
     }
@@ -141,5 +190,6 @@ enum Route: Hashable {
     case search
     case favorites
     case watched
+    case notifications
     case filter
 }

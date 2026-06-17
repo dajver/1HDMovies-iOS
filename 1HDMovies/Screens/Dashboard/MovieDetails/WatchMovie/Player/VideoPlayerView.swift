@@ -16,6 +16,7 @@ struct VideoPlayerView: View {
     let onClose: () -> Void
     var onEpisodeChange: ((Int) -> Void)?
     var onServerChange: ((ServerOption) -> Void)?
+    var onWatchedReached: (() -> Void)?
 
     @State private var presented = false
 
@@ -55,7 +56,8 @@ struct VideoPlayerView: View {
             selectedServer: selectedServer,
             onClose: onClose,
             onEpisodeChange: onEpisodeChange,
-            onServerChange: onServerChange
+            onServerChange: onServerChange,
+            onWatchedReached: onWatchedReached
         )
         playerVC.modalPresentationStyle = .fullScreen
 
@@ -87,6 +89,11 @@ class CustomPlayerViewController: UIViewController {
     private let onClose: () -> Void
     private let onEpisodeChange: ((Int) -> Void)?
     private let onServerChange: ((ServerOption) -> Void)?
+    private let onWatchedReached: (() -> Void)?
+
+    /// Mark the episode watched after this many seconds of playback position.
+    private let watchedThreshold: Double = 300
+    private var hasReachedWatchedThreshold = false
 
     // Video layer
     private var playerLayer: AVPlayerLayer!
@@ -135,7 +142,7 @@ class CustomPlayerViewController: UIViewController {
     init(player: AVPlayer, subtitles: [SubtitleTrack], episodes: [MovieEpisodesDataModel],
          currentEpisodeIndex: Int, servers: [ServerOption], selectedServer: ServerOption?,
          onClose: @escaping () -> Void, onEpisodeChange: ((Int) -> Void)?,
-         onServerChange: ((ServerOption) -> Void)?) {
+         onServerChange: ((ServerOption) -> Void)?, onWatchedReached: (() -> Void)?) {
         self.player = player
         self.subtitles = subtitles
         self.episodes = episodes
@@ -145,6 +152,7 @@ class CustomPlayerViewController: UIViewController {
         self.onClose = onClose
         self.onEpisodeChange = onEpisodeChange
         self.onServerChange = onServerChange
+        self.onWatchedReached = onWatchedReached
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -454,6 +462,7 @@ class CustomPlayerViewController: UIViewController {
         timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             self?.updateTime(time)
             self?.updateSubtitle(at: time.seconds)
+            self?.checkWatchedThreshold(at: time.seconds)
         }
 
         timeControlObservation = player.observe(\.timeControlStatus, options: [.new]) { [weak self] player, _ in
@@ -645,6 +654,12 @@ class CustomPlayerViewController: UIViewController {
     }
 
     // MARK: - Time
+
+    private func checkWatchedThreshold(at seconds: Double) {
+        guard !hasReachedWatchedThreshold, seconds.isFinite, seconds >= watchedThreshold else { return }
+        hasReachedWatchedThreshold = true
+        onWatchedReached?()
+    }
 
     private func updateTime(_ time: CMTime) {
         guard !isSeeking else { return }

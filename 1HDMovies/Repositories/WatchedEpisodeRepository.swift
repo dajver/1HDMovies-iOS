@@ -14,6 +14,12 @@ class WatchedEpisodeRepository {
         return Set(items.map { $0.episodeLink })
     }
 
+    func watchedDates() -> [String: Date] {
+        guard let context = modelContext else { return [:] }
+        let items = (try? context.fetch(FetchDescriptor<WatchedEpisode>())) ?? []
+        return Dictionary(items.map { ($0.episodeLink, $0.watchedAt) }, uniquingKeysWith: { a, b in max(a, b) })
+    }
+
     func isWatched(episodeLink: String) -> Bool {
         guard let context = modelContext else { return false }
         var descriptor = FetchDescriptor<WatchedEpisode>(
@@ -29,5 +35,17 @@ class WatchedEpisodeRepository {
         context.insert(WatchedEpisode(episodeLink: episodeLink))
         try? context.save()
         Task { await FirebaseSyncService.shared.uploadWatchedEpisodeStatus(episodeLink: episodeLink) }
+    }
+
+    func removeWatched(episodeLink: String) {
+        guard let context = modelContext else { return }
+        let descriptor = FetchDescriptor<WatchedEpisode>(
+            predicate: #Predicate { $0.episodeLink == episodeLink }
+        )
+        if let items = try? context.fetch(descriptor) {
+            for item in items { context.delete(item) }
+            try? context.save()
+        }
+        Task { await FirebaseSyncService.shared.deleteWatchedEpisodeStatus(episodeLink: episodeLink) }
     }
 }

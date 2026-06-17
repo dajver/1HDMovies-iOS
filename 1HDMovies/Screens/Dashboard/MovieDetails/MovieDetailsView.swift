@@ -38,6 +38,9 @@ struct MovieDetailsView: View {
         }
         .task {
             await viewModel.fetchDetails(url: movieUrl)
+            if let movie = viewModel.movieDetails {
+                FavoriteRepository.shared.refreshFavoriteIfNeeded(movie)
+            }
             isFavorite = viewModel.isFavorite()
             isWatched = viewModel.isWatched()
             await viewModel.fetchYouMayAlsoLike(url: movieUrl)
@@ -348,6 +351,23 @@ struct MovieDetailsView: View {
                                 )
                             }
                             .buttonStyle(.plain)
+                            .contextMenu {
+                                if viewModel.watchedEpisodeLinks.contains(episode.link) {
+                                    Button(role: .destructive) {
+                                        WatchedEpisodeRepository.shared.removeWatched(episodeLink: episode.link)
+                                        viewModel.refreshWatchedEpisodes()
+                                    } label: {
+                                        Label("Mark as unwatched", systemImage: "eye.slash")
+                                    }
+                                } else {
+                                    Button {
+                                        WatchedEpisodeRepository.shared.markWatched(episodeLink: episode.link)
+                                        viewModel.refreshWatchedEpisodes()
+                                    } label: {
+                                        Label("Mark as watched", systemImage: "eye")
+                                    }
+                                }
+                            }
                         }
                     }
                     .padding(.horizontal)

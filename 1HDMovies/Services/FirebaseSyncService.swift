@@ -51,6 +51,10 @@ final class FirebaseSyncService {
             try await syncDeletedWatched(uid: uid)
             try await uploadWatchedEpisodes(uid: uid)
             try await downloadWatchedEpisodes(uid: uid)
+            try await uploadEpisodeSnapshots(uid: uid)
+            try await downloadEpisodeSnapshots(uid: uid)
+            try await uploadShowNotifications(uid: uid)
+            try await downloadShowNotifications(uid: uid)
             log.info("Full sync completed")
         } catch {
             log.error("Sync failed: \(error.localizedDescription)")
@@ -305,6 +309,22 @@ final class FirebaseSyncService {
         }
     }
 
+    func deleteWatchedEpisodeStatus(episodeLink: String) async {
+        guard let uid else { return }
+        do {
+            let snapshot = try await db.collection("users").document(uid)
+                .collection("watchedEpisodes")
+                .whereField("episodeLink", isEqualTo: episodeLink)
+                .getDocuments()
+            for doc in snapshot.documents {
+                try await doc.reference.delete()
+            }
+            log.info("Deleted watched episode: \(episodeLink)")
+        } catch {
+            log.error("Failed to delete watched episode: \(error.localizedDescription)")
+        }
+    }
+
     private func uploadWatchedEpisodes(uid: String) async throws {
         guard let context = WatchedEpisodeRepository.shared.modelContext else { return }
         let allWatched = (try? context.fetch(FetchDescriptor<WatchedEpisode>())) ?? []
@@ -348,6 +368,187 @@ final class FirebaseSyncService {
         }
         if downloaded > 0 { try? context.save() }
         log.info("Downloaded \(downloaded) watched episodes")
+    }
+
+    // MARK: - Episode Snapshots Sync
+
+    func uploadEpisodeSnapshot(linkToDetails: String, knownEpisodeLinks: [String], lastCheckedAt: Date) async {
+        guard let uid else { return }
+        do {
+            let snap = try await db.collection("users").document(uid)
+                .collection("episodeSnapshots")
+                .whereField("linkToDetails", isEqualTo: linkToDetails)
+                .getDocuments()
+            let data: [String: Any] = [
+                "linkToDetails": linkToDetails,
+                "knownEpisodeLinks": knownEpisodeLinks,
+                "lastCheckedAt": Timestamp(date: lastCheckedAt)
+            ]
+            if let doc = snap.documents.first {
+                let cloudDate = (doc.data()["lastCheckedAt"] as? Timestamp)?.dateValue() ?? .distantPast
+                if lastCheckedAt > cloudDate { try await doc.reference.setData(data) }
+            } else {
+                try await db.collection("users").document(uid)
+                    .collection("episodeSnapshots").addDocument(data: data)
+            }
+        } catch {
+            log.error("Failed to upload episode snapshot: \(error.localizedDescription)")
+        }
+    }
+
+    private func uploadEpisodeSnapshots(uid: String) async throws {
+        guard let context = NewEpisodeService.shared.modelContext else { return }
+        let locals = (try? context.fetch(FetchDescriptor<ShowEpisodeSnapshot>())) ?? []
+        for snapshot in locals {
+            await uploadEpisodeSnapshot(linkToDetails: snapshot.linkToDetails,
+                                        knownEpisodeLinks: snapshot.knownEpisodeLinks,
+                                        lastCheckedAt: snapshot.lastCheckedAt)
+        }
+    }
+
+    private func downloadEpisodeSnapshots(uid: String) async throws {
+        guard let context = NewEpisodeService.shared.modelContext else { return }
+        let snapshot = try await db.collection("users").document(uid)
+            .collection("episodeSnapshots").getDocuments()
+        let locals = (try? context.fetch(FetchDescriptor<ShowEpisodeSnapshot>())) ?? []
+        var localByLink: [String: ShowEpisodeSnapshot] = [:]
+        for item in locals { localByLink[item.linkToDetails] = item }
+
+        var changed = false
+        for doc in snapshot.documents {
+            let data = doc.data()
+            guard let link = data["linkToDetails"] as? String else { continue }
+            let links = data["knownEpisodeLinks"] as? [String] ?? []
+            let date = (data["lastCheckedAt"] as? Timestamp)?.dateValue() ?? .distantPast
+            if let local = localByLink[link] {
+                if date > local.lastCheckedAt {
+                    local.knownEpisodeLinks = links
+                    local.lastCheckedAt = date
+                    changed = true
+                }
+            } else {
+                let item = ShowEpisodeSnapshot(linkToDetails: link, knownEpisodeLinks: links)
+                item.lastCheckedAt = date
+                context.insert(item)
+                changed = true
+            }
+        }
+        if changed { try? context.save() }
+    }
+
+    // MARK: - Show Notifications Sync
+
+    /// Push one show's notification. Last-writer-wins by detectedAt (a newer batch
+    /// overwrites the cloud count); same batch only propagates a local "read".
+    func uploadShowNotification(_ notification: ShowNotification) async {
+        guard let uid else { return }
+        do {
+            let link = notification.showLinkToDetails
+            let snap = try await db.collection("users").document(uid)
+                .collection("showNotifications")
+                .whereField("showLinkToDetails", isEqualTo: link)
+                .getDocuments()
+            if let doc = snap.documents.first {
+                let cloudDate = (doc.data()["detectedAt"] as? Timestamp)?.dateValue() ?? .distantPast
+                let cloudRead = doc.data()["isRead"] as? Bool ?? false
+                if notification.detectedAt > cloudDate {
+                    try await doc.reference.setData(showNotificationData(notification))
+                } else if notification.detectedAt == cloudDate && notification.isRead && !cloudRead {
+                    try await doc.reference.updateData(["isRead": true])
+                }
+            } else {
+                try await db.collection("users").document(uid)
+                    .collection("showNotifications").addDocument(data: showNotificationData(notification))
+            }
+        } catch {
+            log.error("Failed to upload show notification: \(error.localizedDescription)")
+        }
+    }
+
+    func markShowNotificationsRead(_ showLinks: [String]) async {
+        guard let uid, !showLinks.isEmpty else { return }
+        do {
+            let linkSet = Set(showLinks)
+            let snapshot = try await db.collection("users").document(uid)
+                .collection("showNotifications").getDocuments()
+            for doc in snapshot.documents {
+                guard let link = doc.data()["showLinkToDetails"] as? String, linkSet.contains(link) else { continue }
+                if (doc.data()["isRead"] as? Bool) != true {
+                    try await doc.reference.updateData(["isRead": true])
+                }
+            }
+        } catch {
+            log.error("Failed to mark show notifications read: \(error.localizedDescription)")
+        }
+    }
+
+    private func uploadShowNotifications(uid: String) async throws {
+        guard let context = NewEpisodeService.shared.modelContext else { return }
+        let locals = (try? context.fetch(FetchDescriptor<ShowNotification>())) ?? []
+        for notification in locals {
+            await uploadShowNotification(notification)
+        }
+    }
+
+    private func downloadShowNotifications(uid: String) async throws {
+        guard let context = NewEpisodeService.shared.modelContext else { return }
+        let snapshot = try await db.collection("users").document(uid)
+            .collection("showNotifications").getDocuments()
+        let locals = (try? context.fetch(FetchDescriptor<ShowNotification>())) ?? []
+        var localByLink: [String: ShowNotification] = [:]
+        for item in locals { localByLink[item.showLinkToDetails] = item }
+
+        var changed = false
+        for doc in snapshot.documents {
+            let data = doc.data()
+            guard let link = data["showLinkToDetails"] as? String else { continue }
+            let cloudDate = (data["detectedAt"] as? Timestamp)?.dateValue() ?? .distantPast
+            let cloudRead = data["isRead"] as? Bool ?? false
+
+            if let local = localByLink[link] {
+                if cloudDate > local.detectedAt {
+                    local.newEpisodeCount = data["newEpisodeCount"] as? Int ?? local.newEpisodeCount
+                    local.latestEpisodeNumber = data["latestEpisodeNumber"] as? String ?? ""
+                    local.latestEpisodeName = data["latestEpisodeName"] as? String ?? ""
+                    local.detectedAt = cloudDate
+                    local.isRead = cloudRead
+                    changed = true
+                } else if cloudDate == local.detectedAt && cloudRead && !local.isRead {
+                    local.isRead = true
+                    changed = true
+                }
+            } else {
+                let item = ShowNotification(
+                    showLinkToDetails: link,
+                    showName: data["showName"] as? String ?? "",
+                    showThumbnail: data["showThumbnail"] as? String ?? "",
+                    newEpisodeCount: data["newEpisodeCount"] as? Int ?? 0,
+                    latestEpisodeNumber: data["latestEpisodeNumber"] as? String ?? "",
+                    latestEpisodeName: data["latestEpisodeName"] as? String ?? ""
+                )
+                if let ts = data["detectedAt"] as? Timestamp { item.detectedAt = ts.dateValue() }
+                item.isRead = cloudRead
+                context.insert(item)
+                changed = true
+            }
+        }
+        if changed {
+            try? context.save()
+            NewEpisodeService.shared.refresh()
+        }
+    }
+
+    private func showNotificationData(_ notification: ShowNotification) -> [String: Any] {
+        [
+            "showLinkToDetails": notification.showLinkToDetails,
+            "showName": notification.showName,
+            "showThumbnail": notification.showThumbnail,
+            "newEpisodeCount": notification.newEpisodeCount,
+            "latestEpisodeNumber": notification.latestEpisodeNumber,
+            "latestEpisodeName": notification.latestEpisodeName,
+            "detectedAt": Timestamp(date: notification.detectedAt),
+            "isRead": notification.isRead
+        ]
     }
 
     // MARK: - Serialization
