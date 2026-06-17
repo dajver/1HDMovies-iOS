@@ -5,6 +5,8 @@ struct MovieDetailsView: View {
     @State private var viewModel = MovieDetailsViewModel()
     @State private var isFavorite = false
     @State private var isWatched = false
+    @State private var showPoster = false
+    @Namespace private var posterNamespace
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     private var isRegular: Bool { horizontalSizeClass == .regular }
@@ -27,6 +29,10 @@ struct MovieDetailsView: View {
         .background(Color.black)
         .navigationTitle(viewModel.movieDetails?.name ?? "")
         .navigationBarTitleDisplayMode(.inline)
+        .fullScreenCover(isPresented: $showPoster) {
+            FullScreenImageView(imageUrl: viewModel.movieDetails?.thumbnail ?? "")
+                .navigationTransition(.zoom(sourceID: "poster", in: posterNamespace))
+        }
         .onAppear {
             viewModel.refreshWatchedEpisodes()
         }
@@ -52,6 +58,9 @@ struct MovieDetailsView: View {
                             .aspectRatio(contentMode: .fit)
                             .frame(width: 280, height: 400)
                             .cornerRadius(16)
+                            .contentShape(Rectangle())
+                            .matchedTransitionSource(id: "poster", in: posterNamespace)
+                            .onTapGesture { showPoster = true }
                     default:
                         Rectangle()
                             .fill(Color.gray.opacity(0.3))
@@ -137,6 +146,9 @@ struct MovieDetailsView: View {
                             .aspectRatio(contentMode: .fit)
                             .frame(height: 200)
                             .cornerRadius(12)
+                            .contentShape(Rectangle())
+                            .matchedTransitionSource(id: "poster", in: posterNamespace)
+                            .onTapGesture { showPoster = true }
                     default:
                         Rectangle()
                             .fill(Color.gray.opacity(0.3))
