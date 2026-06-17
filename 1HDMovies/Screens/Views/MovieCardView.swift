@@ -74,5 +74,10 @@ struct MovieCardView: View {
                     .frame(width: width, alignment: .leading)
             }
         }
+        // Constrain the tappable area to the card's frame. Wide (backdrop) images
+        // with .aspectRatio(.fill) overflow horizontally and, although clipped
+        // visually, stay hit-testable — which made a card's edge open its neighbor.
+        .frame(width: width)
+        .contentShape(Rectangle())
     }
 }

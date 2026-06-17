@@ -10,6 +10,17 @@ struct DashboardView: View {
 
     private var isRegular: Bool { horizontalSizeClass == .regular }
 
+    // Same content as the top slider, shown as poster cards that open details.
+    // Stored (not computed) so the instances/identities stay stable across renders.
+    @State private var newReleases: [MoviesDataModel] = []
+
+    private func rebuildNewReleases() {
+        newReleases = viewModel.mostPopular.map {
+            MoviesDataModel(name: $0.name, thumbnail: $0.thumbnail, link: $0.link,
+                            type: .movie, quality: $0.quality, other: "")
+        }
+    }
+
     var body: some View {
         NavigationStack(path: $navigationPath) {
             ScrollView {
@@ -24,6 +35,8 @@ struct DashboardView: View {
                     }
 
                     continueWatchingRow
+
+                    movieRow(title: "New Releases", movies: newReleases)
 
                     if viewModel.isLoading {
                         ProgressView()
@@ -119,6 +132,10 @@ struct DashboardView: View {
             .onAppear {
                 notificationService.refresh()
                 continueWatching.refresh()
+                rebuildNewReleases()
+            }
+            .onChange(of: viewModel.mostPopular.count) { _, _ in
+                rebuildNewReleases()
             }
         }
     }
@@ -167,7 +184,7 @@ struct DashboardView: View {
 
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: isRegular ? 16 : 12) {
-                        ForEach(movies) { movie in
+                        ForEach(movies, id: \.link) { movie in
                             FocusableMovieCard(movie: movie,
                                                width: isRegular ? 180 : 140,
                                                height: isRegular ? 260 : 200)
