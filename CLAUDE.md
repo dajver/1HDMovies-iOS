@@ -1,0 +1,51 @@
+# 1HD Movies — iOS app
+
+A SwiftUI app that browses and streams movies / TV shows by **scraping the website `1hd.art`** (no official API). Content is parsed from HTML with SwiftSoup; playback streams are sniffed out of the embed pages at runtime.
+
+## Tech stack
+- **SwiftUI + MVVM**, `@Observable` view models (Observation framework). Target **iOS 26.2**, model name `onehdApp` (`@main` in `1HDMoviesApp.swift`).
+- **SwiftData** for local persistence (`@Model` classes in `Database/`).
+- **Firebase** (Auth + Firestore) for cross-device sync; **Google Sign-In**.
+- **SwiftSoup** for HTML scraping. **AVPlayer + WKWebView** for the custom player.
+- Base site URL and scraping User-Agent live in `Config.swift` (`https://1hd.art`).
+
+## Project layout (`1HDMovies/`)
+- `1HDMoviesApp.swift` — app entry. Declares the SwiftData `Schema` (every `@Model` must be listed here) and, in `SplashView().onAppear`, injects the shared `ModelContext` into each repository/service singleton. Firebase sync + new-episode check run from its `.task`.
+- `Config.swift` — `baseURL`, `userAgent`.
+- `Network/` — `HttpClient` (async GET with the spoofed UA), `SwiftSoupExtensions`.
+- `Models/` — plain data structs (`MovieModels.swift` has `MoviesDataModel`, `MoviesDetailsDataModel`, `MovieSeasonDataModel`, `MovieEpisodesDataModel`, `MostPopularMoviesDataModel`, `MovieType`).
+- `Repositories/` — one per concern. Two kinds:
+  - **Scraping repos** (`MovieDetailsRepository`, `MostPopularRepository`, `SearchRepository`, …) fetch HTML and parse it.
+  - **Persistence repos** (`FavoriteRepository`, `WatchedRepository`, `WatchedEpisodeRepository`) wrap SwiftData. They're `@MainActor` singletons with a `var modelContext: ModelContext?` set at launch.
+- `Services/` — `AuthenticationService` (Google/Firebase auth), `FirebaseSyncService` (Firestore up/download), `NewEpisodeService` (new-episode detection + notifications).
+- `Database/` — SwiftData `@Model`s: `FavoriteMovie`, `WatchedMovie` (show-level watched), `WatchedEpisode` (per-episode), `ShowEpisodeSnapshot` + `ShowNotification` (new-episode tracking). `FavoriteMigration` migrates the old UserDefaults favorites once.
+- `Screens/Dashboard/` — the bulk of the UI. `DashboardView` hosts the single `NavigationStack` and the `Route` enum (all navigation goes through `navigationDestination(for: Route.self)`).
+
+## Build / run
+```bash
+xcodebuild -project 1HDMovies.xcodeproj -scheme 1HDMovies \
+  -destination 'generic/platform=iOS' -configuration Debug build CODE_SIGNING_ALLOWED=NO
+```
+- `CODE_SIGNING_ALLOWED=NO` lets it build without signing — use this to verify compilation.
+- The project uses an **Xcode 16 synchronized folder group** (`PBXFileSystemSynchronizedRootGroup`). New files added under `1HDMovies/` are **auto-included** — you do **not** edit `project.pbxproj` to add files. Conversely, a stray file in that folder gets bundled automatically (this once caused a "Multiple commands produce Info.plist" error).
+- Editor/SourceKit often reports spurious single-file "Cannot find type X in scope" errors because it resolves files in isolation. **Trust the `xcodebuild` result**, not those.
+
+## Key flows
+- **Browsing**: `DashboardViewModel.fetchAll()` (run during splash) loads the carousel + rows via the scraping repos. `MovieDetailsView` loads a movie/show; for TV it fetches seasons → episodes via an AJAX endpoint.
+- **Playback** (`Screens/Dashboard/MovieDetails/WatchMovie/`): `WatchMovieView` loads the embed page in a hidden `StreamDetectorWebView` (WKWebView with injected JS) that intercepts `.m3u8`/subtitle URLs, then hands the detected stream to `VideoPlayerView` (a `UIViewControllerRepresentable` wrapping a custom AVPlayer controller). Server switching and prev/next-episode are callbacks back into `WatchMovieView`.
+- **Favorites / Watched / Continue Watching / Notifications**: see Features below. All favorited shows' season lists are stored on `FavoriteMovie` and kept fresh via `FavoriteRepository.refreshFavoriteIfNeeded`.
+- **Firebase sync**: `FirebaseSyncService.syncAll()` (launch, when signed in) reconciles favorites, watched movies, watched episodes, episode snapshots, and show notifications. Each model has upload/download (and some delete) helpers; single-item uploads fire from the persistence repos on mutation. All guard on `uid` so they no-op when signed out.
+
+## Implemented features (so future sessions know they exist)
+- Per-**episode** watched tracking; an episode is marked watched only after **5 minutes of playback** (threshold in `VideoPlayerView`/`CustomPlayerViewController`, fired via `onWatchedReached`). **Long-press an episode** → context menu to mark watched/unwatched.
+- **Favorites** screen excludes show-level-watched items; a separate **Watched** screen shows them (reachable via the eye icon in Favorites).
+- **Continue Watching** row on the dashboard: favorited TV shows with unwatched episodes, proposing the episode **after the furthest one watched** (never an earlier season). Logic in `ContinueWatchingViewModel`.
+- **New Releases** row: same content as the top slider but cards open *details* (`Route.movieDetails`), not playback.
+- **Notifications** (bell icon + badge): one `ShowNotification` per favorited show with a count of new episodes since last read; detected by diffing current episodes against `ShowEpisodeSnapshot` on launch (6-hour throttle, pull-to-refresh bypasses it).
+
+## Gotchas learned the hard way
+- **Scraping selectors are fragile** — the site changes its markup. Past breakages: the details title moved `h3.heading-xl` → `h2.heading-xl` (now selected by class only, `.heading-xl`); the home carousel must be parsed **per `swiper-slide`** (the page's parallel name/thumb/link lists don't align — clones + cover-less slides). When something shows blank or "wrong movie", **fetch the live page with `curl` + the Config UA and re-check the selectors** before touching Swift.
+- **Wide images overflow hit-testing**: `MovieCardView` uses `.aspectRatio(.fill)`; with wide (backdrop) thumbnails the clipped overflow stayed tappable and opened the neighbor card. Fixed with `.frame(width:) + .contentShape(Rectangle())`. Keep that when editing cards.
+- **SwiftUI `.toolbar`/`.navigationTitle` from `@Observable`**: prefer a value the body reads directly; toolbar content doesn't always re-render on observable changes.
+- **SwiftData schema changes** (adding/renaming a `@Model`) migrate the store and can drop a renamed entity's rows once — expect that during model changes; signed-in users are restored from Firestore.
+- Favorites saved during a scraping-breakage can carry **empty name / stale episode links**; `refreshFavoriteIfNeeded` repairs name/thumbnail/episodes from fresh data (and the new-episode check bypasses the throttle for empty-name favorites).
