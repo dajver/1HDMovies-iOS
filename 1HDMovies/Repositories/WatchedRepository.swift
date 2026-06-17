@@ -7,6 +7,13 @@ class WatchedRepository {
 
     var modelContext: ModelContext?
 
+    func allWatchedLinks() -> Set<String> {
+        guard let context = modelContext else { return [] }
+        let descriptor = FetchDescriptor<WatchedMovie>()
+        let items = (try? context.fetch(descriptor)) ?? []
+        return Set(items.map { $0.linkToDetails })
+    }
+
     func isWatched(linkToDetails: String) -> Bool {
         guard let context = modelContext else { return false }
         var descriptor = FetchDescriptor<WatchedMovie>(

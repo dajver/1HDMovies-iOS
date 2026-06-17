@@ -1,7 +1,7 @@
 import SwiftUI
 
-struct FavoriteView: View {
-    @State private var viewModel = FavoriteViewModel()
+struct WatchedView: View {
+    @State private var viewModel = WatchedViewModel()
     @State private var refreshId = UUID()
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
@@ -14,13 +14,13 @@ struct FavoriteView: View {
 
     var body: some View {
         Group {
-            if viewModel.favorites.isEmpty {
+            if viewModel.watched.isEmpty {
                 VStack {
                     Spacer()
-                    Image(systemName: "heart.slash")
+                    Image(systemName: "eye.slash")
                         .font(.system(size: 50))
                         .foregroundColor(.gray)
-                    Text("No favorites yet")
+                    Text("Nothing watched yet")
                         .foregroundColor(.gray)
                         .padding(.top, 8)
                     Spacer()
@@ -29,7 +29,7 @@ struct FavoriteView: View {
             } else {
                 ScrollView {
                     LazyVGrid(columns: columns, spacing: 16) {
-                        ForEach(viewModel.favorites) { movie in
+                        ForEach(viewModel.watched) { movie in
                             FocusableFavoriteCard(movie: movie, cardHeight: cardHeight)
                                 .id("\(movie.id)-\(refreshId)")
                         }
@@ -39,18 +39,10 @@ struct FavoriteView: View {
             }
         }
         .background(Color.black)
-        .navigationTitle("Favorites")
+        .navigationTitle("Watched")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink(value: Route.watched) {
-                    Image(systemName: "eye.fill")
-                        .foregroundColor(.green)
-                }
-            }
-        }
         .onAppear {
-            viewModel.fetchFavorites()
+            viewModel.fetchWatched()
             refreshId = UUID()
         }
     }
