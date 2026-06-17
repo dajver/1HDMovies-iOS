@@ -83,7 +83,16 @@ struct WatchMovieView: View {
         guard index >= 0, index < episodes.count else { return }
         activeEpisodeIndex = index
         activeMovieUrl = episodes[index].link
-        resetStream()
+        // Clear stale stream + embed state and show the loading state so the
+        // StreamDetectorWebView isn't recreated with the previous episode's
+        // embed URL while the new one is still being fetched.
+        detectedStreamUrl = nil
+        detectedSubtitles = []
+        streamKey = UUID()
+        viewModel.embedUrl = nil
+        viewModel.servers = []
+        viewModel.selectedServer = nil
+        viewModel.isLoading = true
         Task {
             await viewModel.fetchEmbedUrl(watchUrl: episodes[index].link)
         }
