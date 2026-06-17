@@ -34,6 +34,7 @@ struct FocusableChip: View {
 struct FocusableEpisodeChip: View {
     let episodeNumber: String
     let episodeName: String
+    var isWatched: Bool = false
 
     @Environment(\.isFocused) private var isFocused
     @State private var isHovered = false
@@ -42,9 +43,16 @@ struct FocusableEpisodeChip: View {
 
     var body: some View {
         VStack(spacing: 4) {
-            Text(episodeNumber)
-                .font(.subheadline)
-                .fontWeight(.bold)
+            HStack(spacing: 4) {
+                if isWatched {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.caption2)
+                        .foregroundColor(.green)
+                }
+                Text(episodeNumber)
+                    .font(.subheadline)
+                    .fontWeight(.bold)
+            }
             if !episodeName.isEmpty {
                 Text(episodeName)
                     .font(.caption2)
@@ -52,16 +60,22 @@ struct FocusableEpisodeChip: View {
             }
         }
         .foregroundColor(.white)
+        .opacity(isWatched && !isHighlighted ? 0.6 : 1)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(isHighlighted ? Color.gray.opacity(0.8) : Color.gray.opacity(0.5))
+        .background(backgroundColor)
         .cornerRadius(8)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(isHighlighted ? Color.white : Color.clear, lineWidth: 2)
+                .stroke(isHighlighted ? Color.white : (isWatched ? Color.green.opacity(0.6) : Color.clear), lineWidth: 2)
         )
         .animation(.easeInOut(duration: 0.15), value: isHighlighted)
         .onHover { isHovered = $0 }
         .focusable()
+    }
+
+    private var backgroundColor: Color {
+        if isHighlighted { return Color.gray.opacity(0.8) }
+        return isWatched ? Color.green.opacity(0.18) : Color.gray.opacity(0.5)
     }
 }

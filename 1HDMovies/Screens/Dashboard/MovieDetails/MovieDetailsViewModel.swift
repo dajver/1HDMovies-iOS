@@ -7,6 +7,7 @@ class MovieDetailsViewModel {
     var isLoading = true
     var selectedSeason: MovieSeasonDataModel?
     var selectedEpisodes: [MovieEpisodesDataModel] = []
+    var watchedEpisodeLinks: Set<String> = []
 
     func fetchDetails(url: String) async {
         do {
@@ -35,6 +36,11 @@ class MovieDetailsViewModel {
     func selectSeason(_ season: MovieSeasonDataModel) {
         selectedSeason = season
         selectedEpisodes = season.episodes
+    }
+
+    @MainActor
+    func refreshWatchedEpisodes() {
+        watchedEpisodeLinks = WatchedEpisodeRepository.shared.allWatchedEpisodeLinks()
     }
 
     func toggleFavorite() {

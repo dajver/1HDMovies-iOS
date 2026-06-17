@@ -49,6 +49,8 @@ final class FirebaseSyncService {
             try await uploadWatched(uid: uid)
             try await downloadWatched(uid: uid)
             try await syncDeletedWatched(uid: uid)
+            try await uploadWatchedEpisodes(uid: uid)
+            try await downloadWatchedEpisodes(uid: uid)
             log.info("Full sync completed")
         } catch {
             log.error("Sync failed: \(error.localizedDescription)")
@@ -280,6 +282,72 @@ final class FirebaseSyncService {
                 log.info("Deleted orphaned cloud watched: \(link)")
             }
         }
+    }
+
+    // MARK: - Watched Episodes Upload/Sync
+
+    func uploadWatchedEpisodeStatus(episodeLink: String) async {
+        guard let uid else { return }
+        do {
+            let snapshot = try await db.collection("users").document(uid)
+                .collection("watchedEpisodes")
+                .whereField("episodeLink", isEqualTo: episodeLink)
+                .getDocuments()
+            guard snapshot.documents.isEmpty else { return }
+            try await db.collection("users").document(uid)
+                .collection("watchedEpisodes").addDocument(data: [
+                    "episodeLink": episodeLink,
+                    "watchedAt": Timestamp(date: Date())
+                ])
+            log.info("Uploaded watched episode: \(episodeLink)")
+        } catch {
+            log.error("Failed to upload watched episode: \(error.localizedDescription)")
+        }
+    }
+
+    private func uploadWatchedEpisodes(uid: String) async throws {
+        guard let context = WatchedEpisodeRepository.shared.modelContext else { return }
+        let allWatched = (try? context.fetch(FetchDescriptor<WatchedEpisode>())) ?? []
+        let snapshot = try await db.collection("users").document(uid)
+            .collection("watchedEpisodes").getDocuments()
+        let cloudLinks = Set(snapshot.documents.compactMap { $0.data()["episodeLink"] as? String })
+
+        var uploaded = 0
+        for item in allWatched {
+            if !cloudLinks.contains(item.episodeLink) {
+                try await db.collection("users").document(uid)
+                    .collection("watchedEpisodes").addDocument(data: [
+                        "episodeLink": item.episodeLink,
+                        "watchedAt": Timestamp(date: item.watchedAt)
+                    ])
+                uploaded += 1
+            }
+        }
+        log.info("Uploaded \(uploaded) watched episodes")
+    }
+
+    private func downloadWatchedEpisodes(uid: String) async throws {
+        guard let context = WatchedEpisodeRepository.shared.modelContext else { return }
+        let snapshot = try await db.collection("users").document(uid)
+            .collection("watchedEpisodes").getDocuments()
+        let allLocal = (try? context.fetch(FetchDescriptor<WatchedEpisode>())) ?? []
+        let localLinks = Set(allLocal.map { $0.episodeLink })
+
+        var downloaded = 0
+        for doc in snapshot.documents {
+            let data = doc.data()
+            guard let link = data["episodeLink"] as? String else { continue }
+            if !localLinks.contains(link) {
+                let item = WatchedEpisode(episodeLink: link)
+                if let ts = data["watchedAt"] as? Timestamp {
+                    item.watchedAt = ts.dateValue()
+                }
+                context.insert(item)
+                downloaded += 1
+            }
+        }
+        if downloaded > 0 { try? context.save() }
+        log.info("Downloaded \(downloaded) watched episodes")
     }
 
     // MARK: - Serialization

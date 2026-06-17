@@ -73,16 +73,23 @@ struct WatchMovieView: View {
         .onAppear {
             activeEpisodeIndex = currentEpisodeIndex
             activeMovieUrl = movieUrl
+            markEpisodeWatched(at: currentEpisodeIndex)
         }
         .task {
             await viewModel.fetchEmbedUrl(watchUrl: movieUrl)
         }
     }
 
+    private func markEpisodeWatched(at index: Int) {
+        guard index >= 0, index < episodes.count else { return }
+        WatchedEpisodeRepository.shared.markWatched(episodeLink: episodes[index].link)
+    }
+
     private func loadEpisode(at index: Int) {
         guard index >= 0, index < episodes.count else { return }
         activeEpisodeIndex = index
         activeMovieUrl = episodes[index].link
+        markEpisodeWatched(at: index)
         // Clear stale stream + embed state and show the loading state so the
         // StreamDetectorWebView isn't recreated with the previous episode's
         // embed URL while the new one is still being fetched.

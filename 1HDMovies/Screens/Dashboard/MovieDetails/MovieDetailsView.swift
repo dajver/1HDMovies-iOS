@@ -24,6 +24,9 @@ struct MovieDetailsView: View {
         }
         .background(Color.black)
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            viewModel.refreshWatchedEpisodes()
+        }
         .task {
             await viewModel.fetchDetails(url: movieUrl)
             isFavorite = viewModel.isFavorite()
@@ -325,7 +328,8 @@ struct MovieDetailsView: View {
                             NavigationLink(value: Route.watchEpisode(episodes: viewModel.selectedEpisodes, currentIndex: index)) {
                                 FocusableEpisodeChip(
                                     episodeNumber: episode.episodeNumber,
-                                    episodeName: episode.episodeName
+                                    episodeName: episode.episodeName,
+                                    isWatched: viewModel.watchedEpisodeLinks.contains(episode.link)
                                 )
                             }
                             .buttonStyle(.plain)
