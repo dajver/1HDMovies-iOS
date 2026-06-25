@@ -158,6 +158,15 @@ class CustomPlayerViewController: UIViewController {
 
     required init?(coder: NSCoder) { fatalError() }
 
+    // MARK: - Sizing
+
+    /// Controls are enlarged on iPad where there's more screen and touch targets
+    /// benefit from being bigger / further apart.
+    private var isPad: Bool { traitCollection.userInterfaceIdiom == .pad }
+    private func scaled(_ base: CGFloat) -> CGFloat { isPad ? base * 1.6 : base }
+
+    private var isPanelVisible: Bool { view.subviews.contains { $0 is PickerPanelView } }
+
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .all }
     override var prefersHomeIndicatorAutoHidden: Bool { true }
     override var prefersStatusBarHidden: Bool { true }
@@ -289,11 +298,11 @@ class CustomPlayerViewController: UIViewController {
         // Center controls
         let hasEpisodes = episodes.count > 1
 
-        configureSymbolButton(prevEpisodeButton, systemName: "backward.end.fill", size: 24)
-        configureSymbolButton(rewindButton, systemName: "gobackward.10", size: 28)
-        configureSymbolButton(playPauseButton, systemName: "pause.fill", size: 36)
-        configureSymbolButton(forwardButton, systemName: "goforward.10", size: 28)
-        configureSymbolButton(nextEpisodeButton, systemName: "forward.end.fill", size: 24)
+        configureSymbolButton(prevEpisodeButton, systemName: "backward.end.fill", size: scaled(24))
+        configureSymbolButton(rewindButton, systemName: "gobackward.10", size: scaled(30))
+        configureSymbolButton(playPauseButton, systemName: "pause.fill", size: scaled(38))
+        configureSymbolButton(forwardButton, systemName: "goforward.10", size: scaled(30))
+        configureSymbolButton(nextEpisodeButton, systemName: "forward.end.fill", size: scaled(24))
 
         prevEpisodeButton.addTarget(self, action: #selector(prevEpisodeTapped), for: .touchUpInside)
         rewindButton.addTarget(self, action: #selector(rewindTapped), for: .touchUpInside)
@@ -306,14 +315,16 @@ class CustomPlayerViewController: UIViewController {
         nextEpisodeButton.isEnabled = currentEpisodeIndex < episodes.count - 1
         nextEpisodeButton.alpha = currentEpisodeIndex < episodes.count - 1 ? 1.0 : 0.3
 
+        // Center stack: prev / play-pause / next. The seek (±10s) buttons live at the
+        // far left/right screen edges (added below) so they're easy to reach.
         var centerItems: [UIView] = []
         if hasEpisodes { centerItems.append(prevEpisodeButton) }
-        centerItems.append(contentsOf: [rewindButton, playPauseButton, forwardButton])
+        centerItems.append(playPauseButton)
         if hasEpisodes { centerItems.append(nextEpisodeButton) }
 
         let centerStack = UIStackView(arrangedSubviews: centerItems)
         centerStack.axis = .horizontal
-        centerStack.spacing = hasEpisodes ? 32 : 48
+        centerStack.spacing = scaled(56)
         centerStack.alignment = .center
         centerStack.translatesAutoresizingMaskIntoConstraints = false
 
@@ -321,6 +332,22 @@ class CustomPlayerViewController: UIViewController {
         NSLayoutConstraint.activate([
             centerStack.centerXAnchor.constraint(equalTo: controlsContainer.centerXAnchor),
             centerStack.centerYAnchor.constraint(equalTo: controlsContainer.centerYAnchor)
+        ])
+
+        // Seek buttons pinned to the very left / right edges with a generous tap area.
+        let edgeInset = scaled(28)
+        let tapSize = scaled(64)
+        controlsContainer.addSubview(rewindButton)
+        controlsContainer.addSubview(forwardButton)
+        NSLayoutConstraint.activate([
+            rewindButton.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: edgeInset),
+            rewindButton.centerYAnchor.constraint(equalTo: controlsContainer.centerYAnchor),
+            rewindButton.widthAnchor.constraint(equalToConstant: tapSize),
+            rewindButton.heightAnchor.constraint(equalToConstant: tapSize),
+            forwardButton.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -edgeInset),
+            forwardButton.centerYAnchor.constraint(equalTo: controlsContainer.centerYAnchor),
+            forwardButton.widthAnchor.constraint(equalToConstant: tapSize),
+            forwardButton.heightAnchor.constraint(equalToConstant: tapSize)
         ])
 
         // Seek bar row
@@ -452,9 +479,65 @@ class CustomPlayerViewController: UIViewController {
     }
 
     private func setupGestures() {
+        // Double-tap left/right to seek -10/+10 (YouTube-style).
+        let doubleTap = UITapGestureRecognizer(target: self, action: #selector(handleDoubleTap(_:)))
+        doubleTap.numberOfTapsRequired = 2
+        doubleTap.delegate = self
+        view.addGestureRecognizer(doubleTap)
+
+        // Single tap toggles the controls; wait for the double-tap to fail first.
         let tap = UITapGestureRecognizer(target: self, action: #selector(toggleControls))
         tap.delegate = self
+        tap.require(toFail: doubleTap)
         view.addGestureRecognizer(tap)
+    }
+
+    @objc private func handleDoubleTap(_ gesture: UITapGestureRecognizer) {
+        guard !isPanelVisible else { return }
+        let width = view.bounds.width
+        guard width > 0 else { return }
+        let x = gesture.location(in: view).x
+        // Left 40% rewinds, right 40% fast-forwards; the middle is left for play/pause.
+        if x < width * 0.4 {
+            seekBy(-10)
+            showSeekFeedback(forward: false)
+        } else if x > width * 0.6 {
+            seekBy(10)
+            showSeekFeedback(forward: true)
+        }
+    }
+
+    /// Brief side pill ("−10s" / "+10s") shown when double-tap seeking.
+    private func showSeekFeedback(forward: Bool) {
+        let pill = UILabel()
+        pill.text = forward ? "+10s" : "−10s"
+        pill.font = .systemFont(ofSize: scaled(16), weight: .bold)
+        pill.textColor = .white
+        pill.textAlignment = .center
+        pill.backgroundColor = UIColor.black.withAlphaComponent(0.55)
+        pill.layer.cornerRadius = scaled(22)
+        pill.clipsToBounds = true
+        pill.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(pill)
+
+        let sideConstraint = forward
+            ? pill.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -scaled(56))
+            : pill.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: scaled(56))
+        NSLayoutConstraint.activate([
+            pill.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            sideConstraint,
+            pill.widthAnchor.constraint(equalToConstant: scaled(92)),
+            pill.heightAnchor.constraint(equalToConstant: scaled(44))
+        ])
+
+        pill.alpha = 0
+        UIView.animate(withDuration: 0.12, animations: { pill.alpha = 1 }) { _ in
+            UIView.animate(withDuration: 0.35, delay: 0.3, options: []) {
+                pill.alpha = 0
+            } completion: { _ in
+                pill.removeFromSuperview()
+            }
+        }
     }
 
     private func setupObservers() {
@@ -467,10 +550,11 @@ class CustomPlayerViewController: UIViewController {
 
         timeControlObservation = player.observe(\.timeControlStatus, options: [.new]) { [weak self] player, _ in
             DispatchQueue.main.async {
+                guard let self else { return }
                 let isPlaying = player.timeControlStatus == .playing
                 let name = isPlaying ? "pause.fill" : "play.fill"
-                let cfg = UIImage.SymbolConfiguration(pointSize: 36, weight: .medium)
-                self?.playPauseButton.setImage(UIImage(systemName: name, withConfiguration: cfg), for: .normal)
+                let cfg = UIImage.SymbolConfiguration(pointSize: self.scaled(38), weight: .medium)
+                self.playPauseButton.setImage(UIImage(systemName: name, withConfiguration: cfg), for: .normal)
             }
         }
 
@@ -513,15 +597,17 @@ class CustomPlayerViewController: UIViewController {
         }
     }
 
-    @objc private func rewindTapped() {
-        let t = CMTimeGetSeconds(player.currentTime())
-        player.seek(to: CMTime(seconds: max(0, t - 10), preferredTimescale: 1))
-    }
+    @objc private func rewindTapped() { seekBy(-10) }
 
-    @objc private func forwardTapped() {
+    @objc private func forwardTapped() { seekBy(10) }
+
+    private func seekBy(_ delta: Double) {
         let t = CMTimeGetSeconds(player.currentTime())
+        guard t.isFinite else { return }
+        var target = t + delta
         let d = CMTimeGetSeconds(player.currentItem?.duration ?? .zero)
-        player.seek(to: CMTime(seconds: min(d, t + 10), preferredTimescale: 1))
+        if d.isFinite { target = min(target, d) }
+        player.seek(to: CMTime(seconds: max(0, target), preferredTimescale: 1))
     }
 
     @objc private func seekStarted() { isSeeking = true }
