@@ -12,6 +12,11 @@ class PlaybackProgressRepository {
     private let minResumeSeconds: Double = 5
     private let endTailSeconds: Double = 15
 
+    /// Progress saves locally every ~10s; throttle the cloud push so we don't write
+    /// to Firestore on every tick. Cross-device handoff is still near-real-time.
+    private var lastCloudUpload: Date = .distantPast
+    private let cloudUploadInterval: TimeInterval = 15
+
     /// Saved resume position for a content link, or nil if there's nothing useful
     /// to resume (no record, too early, or effectively finished).
     func position(for link: String) -> Double? {
@@ -31,20 +36,32 @@ class PlaybackProgressRepository {
             return
         }
 
-        if let item = fetch(link, in: context) {
-            item.position = position
-            item.duration = duration
-            item.updatedAt = Date()
+        let now = Date()
+        let item: PlaybackProgress
+        if let existing = fetch(link, in: context) {
+            existing.position = position
+            existing.duration = duration
+            existing.updatedAt = now
+            item = existing
         } else {
-            context.insert(PlaybackProgress(contentLink: link, position: position, duration: duration))
+            item = PlaybackProgress(contentLink: link, position: position, duration: duration)
+            context.insert(item)
         }
         try? context.save()
+
+        // Push to the cloud (throttled) so another device resumes from here.
+        if now.timeIntervalSince(lastCloudUpload) >= cloudUploadInterval {
+            lastCloudUpload = now
+            let updatedAt = item.updatedAt
+            Task { await FirebaseSyncService.shared.uploadPlaybackProgress(contentLink: link, position: position, duration: duration, updatedAt: updatedAt) }
+        }
     }
 
     func clear(link: String) {
         guard let context = modelContext, let item = fetch(link, in: context) else { return }
         context.delete(item)
         try? context.save()
+        Task { await FirebaseSyncService.shared.deletePlaybackProgress(contentLink: link) }
     }
 
     private func fetch(_ link: String, in context: ModelContext) -> PlaybackProgress? {

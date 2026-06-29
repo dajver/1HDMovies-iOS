@@ -51,6 +51,8 @@ final class FirebaseSyncService {
             try await syncDeletedWatched(uid: uid)
             try await uploadWatchedEpisodes(uid: uid)
             try await downloadWatchedEpisodes(uid: uid)
+            try await uploadPlaybackProgresses(uid: uid)
+            try await downloadPlaybackProgress(uid: uid)
             try await uploadEpisodeSnapshots(uid: uid)
             try await downloadEpisodeSnapshots(uid: uid)
             try await uploadShowNotifications(uid: uid)
@@ -368,6 +370,89 @@ final class FirebaseSyncService {
         }
         if downloaded > 0 { try? context.save() }
         log.info("Downloaded \(downloaded) watched episodes")
+    }
+
+    // MARK: - Playback Progress Sync
+
+    /// Upserts one resume point, last-writer-wins by `updatedAt` so the device that
+    /// watched most recently determines the position other devices resume from.
+    func uploadPlaybackProgress(contentLink: String, position: Double, duration: Double, updatedAt: Date) async {
+        guard let uid else { return }
+        do {
+            let snap = try await db.collection("users").document(uid)
+                .collection("playbackProgress")
+                .whereField("contentLink", isEqualTo: contentLink)
+                .getDocuments()
+            let data: [String: Any] = [
+                "contentLink": contentLink,
+                "position": position,
+                "duration": duration,
+                "updatedAt": Timestamp(date: updatedAt)
+            ]
+            if let doc = snap.documents.first {
+                let cloudDate = (doc.data()["updatedAt"] as? Timestamp)?.dateValue() ?? .distantPast
+                if updatedAt >= cloudDate { try await doc.reference.setData(data) }
+            } else {
+                try await db.collection("users").document(uid)
+                    .collection("playbackProgress").addDocument(data: data)
+            }
+        } catch {
+            log.error("Failed to upload playback progress: \(error.localizedDescription)")
+        }
+    }
+
+    func deletePlaybackProgress(contentLink: String) async {
+        guard let uid else { return }
+        do {
+            let snapshot = try await db.collection("users").document(uid)
+                .collection("playbackProgress")
+                .whereField("contentLink", isEqualTo: contentLink)
+                .getDocuments()
+            for doc in snapshot.documents { try await doc.reference.delete() }
+        } catch {
+            log.error("Failed to delete playback progress: \(error.localizedDescription)")
+        }
+    }
+
+    private func uploadPlaybackProgresses(uid: String) async throws {
+        guard let context = PlaybackProgressRepository.shared.modelContext else { return }
+        let locals = (try? context.fetch(FetchDescriptor<PlaybackProgress>())) ?? []
+        for item in locals {
+            await uploadPlaybackProgress(contentLink: item.contentLink, position: item.position,
+                                         duration: item.duration, updatedAt: item.updatedAt)
+        }
+    }
+
+    private func downloadPlaybackProgress(uid: String) async throws {
+        guard let context = PlaybackProgressRepository.shared.modelContext else { return }
+        let snapshot = try await db.collection("users").document(uid)
+            .collection("playbackProgress").getDocuments()
+        let locals = (try? context.fetch(FetchDescriptor<PlaybackProgress>())) ?? []
+        var localByLink: [String: PlaybackProgress] = [:]
+        for item in locals { localByLink[item.contentLink] = item }
+
+        var changed = false
+        for doc in snapshot.documents {
+            let data = doc.data()
+            guard let link = data["contentLink"] as? String else { continue }
+            let position = data["position"] as? Double ?? 0
+            let duration = data["duration"] as? Double ?? 0
+            let date = (data["updatedAt"] as? Timestamp)?.dateValue() ?? .distantPast
+            if let local = localByLink[link] {
+                if date > local.updatedAt {
+                    local.position = position
+                    local.duration = duration
+                    local.updatedAt = date
+                    changed = true
+                }
+            } else {
+                let item = PlaybackProgress(contentLink: link, position: position, duration: duration)
+                item.updatedAt = date
+                context.insert(item)
+                changed = true
+            }
+        }
+        if changed { try? context.save() }
     }
 
     // MARK: - Episode Snapshots Sync
