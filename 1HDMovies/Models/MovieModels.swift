@@ -51,10 +51,24 @@ struct MoviesDetailsDataModel: Identifiable, Codable, Equatable {
     let imdb: String
     let release: String
     let production: String
+    // Individual, clickable tags parsed from the details page (each links to a listing page:
+    // genre, actor, country, production company, year). Not persisted (omitted from CodingKeys)
+    // — favorites keep the plain `genre`/`cast`/… strings instead.
+    var genres: [TagRef] = []
+    var casts: [TagRef] = []
+    var countries: [TagRef] = []
+    var productions: [TagRef] = []
+    var years: [TagRef] = []
     var seasonsList: [MovieSeasonDataModel]?
     var addedAt: Date?
 
-    init(name: String, thumbnail: String, linkToWatch: String, linkToDetails: String, watchMovieLinkWithEpisodeId: String, type: MovieType, description: String, quality: String, cast: String, genre: String, duration: String, country: String, imdb: String, release: String, production: String, seasonsList: [MovieSeasonDataModel]? = nil) {
+    enum CodingKeys: String, CodingKey {
+        case id, name, thumbnail, linkToWatch, linkToDetails, watchMovieLinkWithEpisodeId
+        case type, description, quality, cast, genre, duration, country, imdb, release
+        case production, seasonsList, addedAt
+    }
+
+    init(name: String, thumbnail: String, linkToWatch: String, linkToDetails: String, watchMovieLinkWithEpisodeId: String, type: MovieType, description: String, quality: String, cast: String, genre: String, duration: String, country: String, imdb: String, release: String, production: String, genres: [TagRef] = [], casts: [TagRef] = [], countries: [TagRef] = [], productions: [TagRef] = [], years: [TagRef] = [], seasonsList: [MovieSeasonDataModel]? = nil) {
         self.id = UUID()
         self.name = name
         self.thumbnail = thumbnail
@@ -71,6 +85,11 @@ struct MoviesDetailsDataModel: Identifiable, Codable, Equatable {
         self.imdb = imdb
         self.release = release
         self.production = production
+        self.genres = genres
+        self.casts = casts
+        self.countries = countries
+        self.productions = productions
+        self.years = years
         self.seasonsList = seasonsList
     }
 
@@ -155,4 +174,15 @@ enum GenresEnum: String, CaseIterable {
     }
 
     var url: String { "\(Config.baseURL)\(path)" }
+
+    var ref: TagRef { TagRef(name: rawValue, url: url) }
+}
+
+// A generic, clickable reference to a listing page — used for genres, cast members,
+// countries, production companies and years parsed off a details page. These values
+// are arbitrary (not limited to the fixed `GenresEnum`), so navigation carries a
+// display name + absolute URL and is rendered by the shared listing screen.
+struct TagRef: Hashable, Codable {
+    let name: String
+    let url: String
 }

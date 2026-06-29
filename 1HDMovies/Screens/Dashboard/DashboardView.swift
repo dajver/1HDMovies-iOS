@@ -51,14 +51,14 @@ struct DashboardView: View {
 
                     movieRow(title: "Movies", movies: viewModel.movies, seeAllRoute: .allMovies)
                     movieRow(title: "TV Shows", movies: viewModel.tvShows, seeAllRoute: .allTvShows)
-                    movieRow(title: "Action", movies: viewModel.actionMovies, seeAllRoute: .genre(.action))
-                    movieRow(title: "Comedy", movies: viewModel.comedyMovies, seeAllRoute: .genre(.comedy))
-                    movieRow(title: "Drama", movies: viewModel.dramaMovies, seeAllRoute: .genre(.drama))
-                    movieRow(title: "Fantasy", movies: viewModel.fantasyMovies, seeAllRoute: .genre(.fantasy))
-                    movieRow(title: "Horror", movies: viewModel.horrorMovies, seeAllRoute: .genre(.horror))
-                    movieRow(title: "Mystery", movies: viewModel.mysteryMovies, seeAllRoute: .genre(.mystery))
-                    movieRow(title: "Animation", movies: viewModel.animationMovies, seeAllRoute: .genre(.animation))
-                    movieRow(title: "Top IMDB", movies: viewModel.topIMDBMovies, seeAllRoute: .genre(.topIMDB))
+                    movieRow(title: "Action", movies: viewModel.actionMovies, seeAllRoute: .tag(GenresEnum.action.ref))
+                    movieRow(title: "Comedy", movies: viewModel.comedyMovies, seeAllRoute: .tag(GenresEnum.comedy.ref))
+                    movieRow(title: "Drama", movies: viewModel.dramaMovies, seeAllRoute: .tag(GenresEnum.drama.ref))
+                    movieRow(title: "Fantasy", movies: viewModel.fantasyMovies, seeAllRoute: .tag(GenresEnum.fantasy.ref))
+                    movieRow(title: "Horror", movies: viewModel.horrorMovies, seeAllRoute: .tag(GenresEnum.horror.ref))
+                    movieRow(title: "Mystery", movies: viewModel.mysteryMovies, seeAllRoute: .tag(GenresEnum.mystery.ref))
+                    movieRow(title: "Animation", movies: viewModel.animationMovies, seeAllRoute: .tag(GenresEnum.animation.ref))
+                    movieRow(title: "Top IMDB", movies: viewModel.topIMDBMovies, seeAllRoute: .tag(GenresEnum.topIMDB.ref))
                 }
                 .padding(.vertical)
             }
@@ -113,8 +113,8 @@ struct DashboardView: View {
                     AllMoviesView()
                 case .allTvShows:
                     AllTvShowsView()
-                case .genre(let genre):
-                    GenreMoviesView(genre: genre)
+                case .tag(let tag):
+                    GenreMoviesView(genre: tag)
                 case .search:
                     SearchView()
                 case .favorites:
@@ -204,7 +204,7 @@ enum Route: Hashable {
     case watchEpisode(episodes: [MovieEpisodesDataModel], currentIndex: Int)
     case allMovies
     case allTvShows
-    case genre(GenresEnum)
+    case tag(TagRef)
     case search
     case favorites
     case watched

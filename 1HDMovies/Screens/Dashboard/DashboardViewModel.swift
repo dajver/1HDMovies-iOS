@@ -67,7 +67,7 @@ class DashboardViewModel {
     @MainActor
     private func fetchGenreMovies(_ genre: GenresEnum) async {
         do {
-            let result = try await GenresRepository.shared.fetchMoviesByGenre(genre: genre, page: 1)
+            let result = try await GenresRepository.shared.fetchMoviesByGenre(genreUrl: genre.url, page: 1)
             switch genre {
             case .action: actionMovies = result
             case .comedy: comedyMovies = result

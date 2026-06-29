@@ -1,11 +1,11 @@
 import SwiftUI
 
 struct GenreMoviesView: View {
-    let genre: GenresEnum
+    let genre: TagRef
     @State private var viewModel: GenreMoviesViewModel
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
-    init(genre: GenresEnum) {
+    init(genre: TagRef) {
         self.genre = genre
         self._viewModel = State(initialValue: GenreMoviesViewModel(genre: genre))
     }
@@ -38,7 +38,7 @@ struct GenreMoviesView: View {
             }
         }
         .background(Color.black)
-        .navigationTitle(genre.rawValue)
+        .navigationTitle(genre.name)
         .navigationBarTitleDisplayMode(.inline)
         .task {
             await viewModel.fetchMovies()

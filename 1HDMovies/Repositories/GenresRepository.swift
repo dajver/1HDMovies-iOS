@@ -4,8 +4,8 @@ import SwiftSoup
 class GenresRepository {
     static let shared = GenresRepository()
 
-    func fetchMoviesByGenre(genre: GenresEnum, page: Int) async throws -> [MoviesDataModel] {
-        let html = try await HttpClient.shared.get("\(genre.url)?page=\(page)")
+    func fetchMoviesByGenre(genreUrl: String, page: Int) async throws -> [MoviesDataModel] {
+        let html = try await HttpClient.shared.get("\(genreUrl)?page=\(page)")
         let doc = try SwiftSoup.parse(html)
         let moviesElements = try doc.select("div.container").select("div.film-list").select("div.item-film")
         let filmVisualInformation = try moviesElements.select("div.film-thumbnail").select("img.film-thumbnail-img")

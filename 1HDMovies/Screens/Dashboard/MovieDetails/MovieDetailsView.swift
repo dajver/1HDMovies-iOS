@@ -283,13 +283,33 @@ struct MovieDetailsView: View {
     @ViewBuilder
     private func detailsSection(movie: MoviesDetailsDataModel) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            if !movie.cast.isEmpty { detailRow("Cast", movie.cast) }
-            if !movie.genre.isEmpty { detailRow("Genre", movie.genre) }
+            if !movie.casts.isEmpty {
+                tagRow("Cast", movie.casts)
+            } else if !movie.cast.isEmpty {
+                detailRow("Cast", movie.cast)
+            }
+            if !movie.genres.isEmpty {
+                tagRow("Genre", movie.genres)
+            } else if !movie.genre.isEmpty {
+                detailRow("Genre", movie.genre)
+            }
             if !movie.duration.isEmpty { detailRow("Duration", "\(movie.duration) min") }
-            if !movie.country.isEmpty { detailRow("Country", movie.country) }
+            if !movie.countries.isEmpty {
+                tagRow("Country", movie.countries)
+            } else if !movie.country.isEmpty {
+                detailRow("Country", movie.country)
+            }
             if !movie.imdb.isEmpty { detailRow("IMDB", movie.imdb) }
-            if !movie.release.isEmpty { detailRow("Release", movie.release) }
-            if !movie.production.isEmpty { detailRow("Production", movie.production) }
+            if !movie.years.isEmpty {
+                tagRow("Year", movie.years)
+            } else if !movie.release.isEmpty {
+                detailRow("Release", movie.release)
+            }
+            if !movie.productions.isEmpty {
+                tagRow("Production", movie.productions)
+            } else if !movie.production.isEmpty {
+                detailRow("Production", movie.production)
+            }
         }
     }
 
@@ -302,6 +322,30 @@ struct MovieDetailsView: View {
             Text(value)
                 .font(.caption)
                 .foregroundColor(.white)
+        }
+    }
+
+    // Clickable chips (genre, cast, country, production, year); each pushes its listing.
+    private func tagRow(_ label: String, _ tags: [TagRef]) -> some View {
+        HStack(alignment: .top) {
+            Text("\(label):")
+                .font(.caption)
+                .foregroundColor(.gray)
+                .frame(width: 80, alignment: .leading)
+            FlowLayout(spacing: 8, lineSpacing: 8) {
+                ForEach(tags, id: \.self) { tag in
+                    NavigationLink(value: Route.tag(tag)) {
+                        Text(tag.name)
+                            .font(.caption)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(Color.white.opacity(0.12))
+                            .foregroundColor(.white)
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
         }
     }
 
@@ -373,6 +417,56 @@ struct MovieDetailsView: View {
                     .padding(.horizontal)
                 }
             }
+        }
+    }
+}
+
+// Simple wrapping flow layout: lays subviews left-to-right, wrapping to a new
+// line when the next subview would overflow the available width. Used for the
+// genre chips on the details screen.
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 8
+    var lineSpacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        var x: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        var totalHeight: CGFloat = 0
+        var widestRow: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > maxWidth {
+                totalHeight += rowHeight + lineSpacing
+                widestRow = max(widestRow, x - spacing)
+                x = 0
+                rowHeight = 0
+            }
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
+        totalHeight += rowHeight
+        widestRow = max(widestRow, x - spacing)
+        let width = maxWidth == .infinity ? widestRow : maxWidth
+        return CGSize(width: max(width, 0), height: totalHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX
+        var y = bounds.minY
+        var rowHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > bounds.minX, x + size.width > bounds.maxX {
+                x = bounds.minX
+                y += rowHeight + lineSpacing
+                rowHeight = 0
+            }
+            subview.place(at: CGPoint(x: x, y: y), anchor: .topLeading, proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
         }
     }
 }

@@ -18,6 +18,11 @@ class MovieDetailsRepository {
         let others = try movieDetails.select("div.others")
         let cast = try others.select("div.item-casts").select("div.item-body").text()
         let genre = try others.select("div.item-genres").select("div.item-body").text()
+        let genres = try tags(in: others, label: "Genres")
+        let casts = try tags(in: others, label: "Casts")
+        let countries = try tags(in: others, label: "Country")
+        let productions = try tags(in: others, label: "Production")
+        let years = try tags(in: others, label: "Year")
         let ratingAndOther = try others.select("div.item").select("div.item-body").eachText()
         let duration = ratingAndOther.count > 2 ? ratingAndOther[2] : ""
         let country = ratingAndOther.count > 3 ? ratingAndOther[3] : ""
@@ -33,7 +38,8 @@ class MovieDetailsRepository {
                 name: title, thumbnail: thumbnail, linkToWatch: linkToWatch,
                 linkToDetails: linkToMovieDetails, watchMovieLinkWithEpisodeId: watchMovieLinkWithEpisodeId,
                 type: type, description: description, quality: quality, cast: cast, genre: genre,
-                duration: duration, country: country, imdb: imdb, release: release, production: production
+                duration: duration, country: country, imdb: imdb, release: release, production: production,
+                genres: genres, casts: casts, countries: countries, productions: productions, years: years
             )
         } else {
             let seasons = try await getSeasons(doc: doc)
@@ -42,9 +48,30 @@ class MovieDetailsRepository {
                 linkToDetails: linkToMovieDetails, watchMovieLinkWithEpisodeId: watchMovieLinkWithEpisodeId,
                 type: type, description: description, quality: quality, cast: cast, genre: genre,
                 duration: duration, country: country, imdb: imdb, release: release, production: production,
+                genres: genres, casts: casts, countries: countries, productions: productions, years: years,
                 seasonsList: seasons
             )
         }
+    }
+
+    // Parses the clickable links from a details "others" item identified by its label
+    // (e.g. "Casts", "Country", "Production", "Year"). Each item shares the markup
+    // `div.item > div.name (label) + div.item-body > a[href]`. Returns [] if absent.
+    private func tags(in others: Elements, label: String) throws -> [TagRef] {
+        for item in try others.select("div.item").array() {
+            let name = try item.select("div.name").first()?.text().trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            guard name.caseInsensitiveCompare(label) == .orderedSame else { continue }
+            var result: [TagRef] = []
+            for anchor in try item.select("div.item-body a").array() {
+                let title = try anchor.text().trimmingCharacters(in: .whitespacesAndNewlines)
+                var href = try anchor.attr("href")
+                guard !title.isEmpty, !href.isEmpty else { continue }
+                if !href.hasPrefix("http") { href = "\(Config.baseURL)\(href)" }
+                result.append(TagRef(name: title, url: href))
+            }
+            return result
+        }
+        return []
     }
 
     private func getSeasons(doc: Document) async throws -> [MovieSeasonDataModel] {
