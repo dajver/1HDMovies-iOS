@@ -12,6 +12,7 @@ class DashboardViewModel {
     var fantasyMovies: [MoviesDataModel] = []
     var horrorMovies: [MoviesDataModel] = []
     var mysteryMovies: [MoviesDataModel] = []
+    var animationMovies: [MoviesDataModel] = []
     var topIMDBMovies: [MoviesDataModel] = []
     var isLoading = true
     var isMostPopularLoading = true
@@ -28,6 +29,7 @@ class DashboardViewModel {
             group.addTask { await self.fetchGenreMovies(.fantasy) }
             group.addTask { await self.fetchGenreMovies(.horror) }
             group.addTask { await self.fetchGenreMovies(.mystery) }
+            group.addTask { await self.fetchGenreMovies(.animation) }
             group.addTask { await self.fetchGenreMovies(.topIMDB) }
         }
     }
@@ -73,6 +75,7 @@ class DashboardViewModel {
             case .fantasy: fantasyMovies = result
             case .horror: horrorMovies = result
             case .mystery: mysteryMovies = result
+            case .animation: animationMovies = result
             case .topIMDB: topIMDBMovies = result
             }
         } catch {}

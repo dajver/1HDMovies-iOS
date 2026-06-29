@@ -138,6 +138,7 @@ enum GenresEnum: String, CaseIterable {
     case fantasy = "Fantasy"
     case horror = "Horror"
     case mystery = "Mystery"
+    case animation = "Animation"
     case topIMDB = "Top IMDB"
 
     var path: String {
@@ -148,6 +149,7 @@ enum GenresEnum: String, CaseIterable {
         case .fantasy: return "/genre/fantasy"
         case .horror: return "/genre/horror"
         case .mystery: return "/genre/mystery"
+        case .animation: return "/genre/animation"
         case .topIMDB: return "/top-imdb"
         }
     }

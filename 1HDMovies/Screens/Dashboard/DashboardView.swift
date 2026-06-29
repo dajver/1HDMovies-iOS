@@ -57,6 +57,7 @@ struct DashboardView: View {
                     movieRow(title: "Fantasy", movies: viewModel.fantasyMovies, seeAllRoute: .genre(.fantasy))
                     movieRow(title: "Horror", movies: viewModel.horrorMovies, seeAllRoute: .genre(.horror))
                     movieRow(title: "Mystery", movies: viewModel.mysteryMovies, seeAllRoute: .genre(.mystery))
+                    movieRow(title: "Animation", movies: viewModel.animationMovies, seeAllRoute: .genre(.animation))
                     movieRow(title: "Top IMDB", movies: viewModel.topIMDBMovies, seeAllRoute: .genre(.topIMDB))
                 }
                 .padding(.vertical)
