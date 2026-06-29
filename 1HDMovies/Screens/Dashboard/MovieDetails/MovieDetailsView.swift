@@ -8,6 +8,7 @@ struct MovieDetailsView: View {
     @State private var showPoster = false
     @Namespace private var posterNamespace
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.openURL) private var openURL
 
     private var isRegular: Bool { horizontalSizeClass == .regular }
 
@@ -29,6 +30,28 @@ struct MovieDetailsView: View {
         .background(Color.black)
         .navigationTitle(viewModel.movieDetails?.name ?? "")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if viewModel.movieDetails != nil {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        viewModel.toggleWatched()
+                        isWatched = viewModel.isWatched()
+                    } label: {
+                        Image(systemName: isWatched ? "eye.fill" : "eye.slash")
+                            .foregroundColor(isWatched ? .green : .white)
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        viewModel.toggleFavorite()
+                        isFavorite = viewModel.isFavorite()
+                    } label: {
+                        Image(systemName: isFavorite ? "heart.fill" : "heart")
+                            .foregroundColor(isFavorite ? .red : .white)
+                    }
+                }
+            }
+        }
         .fullScreenCover(isPresented: $showPoster) {
             FullScreenImageView(imageUrl: viewModel.movieDetails?.thumbnail ?? "")
                 .navigationTransition(.zoom(sourceID: "poster", in: posterNamespace))
@@ -114,7 +137,7 @@ struct MovieDetailsView: View {
                             }
                         }
 
-                        actionButtons
+                        trailerButton(for: movie)
                     }
                     .padding(.top, 8)
                 }
@@ -205,7 +228,7 @@ struct MovieDetailsView: View {
                 .padding(.horizontal)
             }
 
-            actionButtons
+            trailerButton(for: movie)
                 .padding(.horizontal)
 
             if let seasons = movie.seasonsList, !seasons.isEmpty {
@@ -217,42 +240,35 @@ struct MovieDetailsView: View {
         .padding(.vertical)
     }
 
-    // MARK: - Action Buttons
+    // MARK: - Trailer
 
-    private var actionButtons: some View {
-        HStack(spacing: 12) {
-            Button {
-                viewModel.toggleFavorite()
-                isFavorite = viewModel.isFavorite()
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: isFavorite ? "heart.fill" : "heart")
-                    Text(isFavorite ? "Favorited" : "Favorite")
-                }
-                .font(.subheadline.weight(.semibold))
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(isFavorite ? Color.red.opacity(0.8) : Color.blue)
-                .cornerRadius(10)
+    // The site doesn't host trailers, so this opens a YouTube search for the title
+    // (+ year when known). YouTube's universal link opens the app if installed,
+    // otherwise Safari — no custom URL scheme / Info.plist entry needed.
+    private func trailerButton(for movie: MoviesDetailsDataModel) -> some View {
+        Button {
+            openTrailer(for: movie)
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "play.rectangle.fill")
+                Text("Trailer")
             }
-
-            Button {
-                viewModel.toggleWatched()
-                isWatched = viewModel.isWatched()
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: isWatched ? "eye.fill" : "eye.slash")
-                    Text(isWatched ? "Watched" : "Not Watched")
-                }
-                .font(.subheadline.weight(.semibold))
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(isWatched ? Color.green.opacity(0.8) : Color.gray.opacity(0.5))
-                .cornerRadius(10)
-            }
+            .font(.headline)
+            .foregroundColor(.white)
+            .padding(.horizontal, isRegular ? 28 : 0)
+            .frame(maxWidth: isRegular ? nil : .infinity)
+            .padding(.vertical, isRegular ? 12 : 16)
+            .background(Color.white.opacity(0.15))
+            .cornerRadius(12)
         }
+    }
+
+    private func openTrailer(for movie: MoviesDetailsDataModel) {
+        let year = movie.years.first?.name ?? movie.release
+        let query = "\(movie.name) \(year) trailer".trimmingCharacters(in: .whitespaces)
+        guard let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let url = URL(string: "https://www.youtube.com/results?search_query=\(encoded)") else { return }
+        openURL(url)
     }
 
     // MARK: - Shared sections
