@@ -97,10 +97,9 @@ struct WatchMovieView: View {
         guard index >= 0, index < episodes.count else { return }
         activeEpisodeIndex = index
         activeMovieUrl = episodes[index].link
-        // Explicit prev/next navigation always starts the episode from the beginning.
-        // Resume only applies when opening from details / continue watching (onAppear),
-        // so stepping to the next episode never inherits another episode's position.
-        resumeAt = 0
+        // Resume this episode from its OWN saved position (keyed by its link); a
+        // never-watched episode has no record, so this is 0 and it starts fresh.
+        resumeAt = PlaybackProgressRepository.shared.position(for: episodes[index].link) ?? 0
         // Clear stale stream + embed state and show the loading state so the
         // StreamDetectorWebView isn't recreated with the previous episode's
         // embed URL while the new one is still being fetched.
