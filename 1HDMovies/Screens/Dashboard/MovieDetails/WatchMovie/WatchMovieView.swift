@@ -16,6 +16,7 @@ struct WatchMovieView: View {
     @State private var activeEpisodeIndex: Int = 0
     @State private var activeMovieUrl: String = ""
     @State private var streamKey: UUID = UUID()
+    @State private var resumeAt: Double = 0
 
     private var isPlayerShowing: Bool { detectedStreamUrl != nil }
 
@@ -32,6 +33,8 @@ struct WatchMovieView: View {
                     currentEpisodeIndex: activeEpisodeIndex,
                     servers: viewModel.servers,
                     selectedServer: viewModel.selectedServer,
+                    contentLink: activeMovieUrl,
+                    resumeAt: resumeAt,
                     onClose: { dismiss() },
                     onEpisodeChange: { index in
                         loadEpisode(at: index)
@@ -39,8 +42,11 @@ struct WatchMovieView: View {
                     onServerChange: { server in
                         switchServer(server)
                     },
-                    onWatchedReached: {
-                        markEpisodeWatched(at: activeEpisodeIndex)
+                    onWatchedReached: { link in
+                        WatchedEpisodeRepository.shared.markWatched(episodeLink: link)
+                    },
+                    onProgress: { link, position, duration in
+                        PlaybackProgressRepository.shared.save(link: link, position: position, duration: duration)
                     }
                 )
                 .ignoresSafeArea()
@@ -59,6 +65,10 @@ struct WatchMovieView: View {
                     )
                     .frame(width: 0, height: 0)
                     .opacity(0)
+                    // Tie the detector's identity to the episode/stream so SwiftUI
+                    // builds a fresh WKWebView (+ coordinator) each time instead of
+                    // reusing the previous episode's page and re-reporting its stream.
+                    .id(streamKey)
                 }
 
                 VStack(spacing: 16) {
@@ -76,21 +86,21 @@ struct WatchMovieView: View {
         .onAppear {
             activeEpisodeIndex = currentEpisodeIndex
             activeMovieUrl = movieUrl
+            resumeAt = PlaybackProgressRepository.shared.position(for: movieUrl) ?? 0
         }
         .task {
             await viewModel.fetchEmbedUrl(watchUrl: movieUrl)
         }
     }
 
-    private func markEpisodeWatched(at index: Int) {
-        guard index >= 0, index < episodes.count else { return }
-        WatchedEpisodeRepository.shared.markWatched(episodeLink: episodes[index].link)
-    }
-
     private func loadEpisode(at index: Int) {
         guard index >= 0, index < episodes.count else { return }
         activeEpisodeIndex = index
         activeMovieUrl = episodes[index].link
+        // Explicit prev/next navigation always starts the episode from the beginning.
+        // Resume only applies when opening from details / continue watching (onAppear),
+        // so stepping to the next episode never inherits another episode's position.
+        resumeAt = 0
         // Clear stale stream + embed state and show the loading state so the
         // StreamDetectorWebView isn't recreated with the previous episode's
         // embed URL while the new one is still being fetched.

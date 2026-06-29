@@ -23,7 +23,7 @@ struct onehdApp: App {
 
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([FavoriteMovie.self, WatchedMovie.self, WatchedEpisode.self,
-                             ShowEpisodeSnapshot.self, ShowNotification.self])
+                             ShowEpisodeSnapshot.self, ShowNotification.self, PlaybackProgress.self])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
         do {
             return try ModelContainer(for: schema, configurations: [config])
@@ -40,6 +40,7 @@ struct onehdApp: App {
                     FavoriteRepository.shared.modelContext = context
                     WatchedRepository.shared.modelContext = context
                     WatchedEpisodeRepository.shared.modelContext = context
+                    PlaybackProgressRepository.shared.modelContext = context
                     NewEpisodeService.shared.modelContext = context
                     FavoriteMigration.migrateIfNeeded(modelContext: context)
                 }

@@ -13,10 +13,20 @@ struct VideoPlayerView: View {
     var currentEpisodeIndex: Int = 0
     var servers: [ServerOption] = []
     var selectedServer: ServerOption?
+    /// Stable link of the item being played (episode link / movie watch URL). The
+    /// player owns this as an immutable value and hands it back in callbacks, so the
+    /// host never has to read its own @State from an escaping closure (unreliable).
+    var contentLink: String = ""
+    /// Seconds to resume playback from (0 starts at the beginning).
+    var resumeAt: Double = 0
     let onClose: () -> Void
+    /// Called with the absolute target episode index to load.
     var onEpisodeChange: ((Int) -> Void)?
     var onServerChange: ((ServerOption) -> Void)?
-    var onWatchedReached: (() -> Void)?
+    /// Fires when the watched threshold is reached, with the played item's link.
+    var onWatchedReached: ((String) -> Void)?
+    /// Reports progress (link, position, duration) for resume-on-reopen.
+    var onProgress: ((String, Double, Double) -> Void)?
 
     @State private var presented = false
 
@@ -54,10 +64,13 @@ struct VideoPlayerView: View {
             currentEpisodeIndex: currentEpisodeIndex,
             servers: servers,
             selectedServer: selectedServer,
+            contentLink: contentLink,
+            resumeAt: resumeAt,
             onClose: onClose,
             onEpisodeChange: onEpisodeChange,
             onServerChange: onServerChange,
-            onWatchedReached: onWatchedReached
+            onWatchedReached: onWatchedReached,
+            onProgress: onProgress
         )
         playerVC.modalPresentationStyle = .fullScreen
 
@@ -86,14 +99,22 @@ class CustomPlayerViewController: UIViewController {
     private let currentEpisodeIndex: Int
     private let servers: [ServerOption]
     private let selectedServer: ServerOption?
+    private let contentLink: String
+    private let resumeAt: Double
     private let onClose: () -> Void
     private let onEpisodeChange: ((Int) -> Void)?
     private let onServerChange: ((ServerOption) -> Void)?
-    private let onWatchedReached: (() -> Void)?
+    private let onWatchedReached: ((String) -> Void)?
+    private let onProgress: ((String, Double, Double) -> Void)?
 
     /// Mark the episode watched after this many seconds of playback position.
     private let watchedThreshold: Double = 300
     private var hasReachedWatchedThreshold = false
+
+    /// Resume-point bookkeeping: seek once on first ready, then save throttled.
+    private var hasSeekedToResume = false
+    private var lastSavedSeconds: Double = -100
+    private let progressSaveInterval: Double = 10
 
     // Video layer
     private var playerLayer: AVPlayerLayer!
@@ -111,6 +132,7 @@ class CustomPlayerViewController: UIViewController {
     private let forwardButton = UIButton(type: .system)
     private let prevEpisodeButton = UIButton(type: .system)
     private let nextEpisodeButton = UIButton(type: .system)
+    private let loadingIndicator = UIActivityIndicatorView(style: .large)
 
     // Bottom options row (below seek bar)
     private let subtitlesButton = UIButton(type: .system)
@@ -141,18 +163,23 @@ class CustomPlayerViewController: UIViewController {
 
     init(player: AVPlayer, subtitles: [SubtitleTrack], episodes: [MovieEpisodesDataModel],
          currentEpisodeIndex: Int, servers: [ServerOption], selectedServer: ServerOption?,
+         contentLink: String, resumeAt: Double,
          onClose: @escaping () -> Void, onEpisodeChange: ((Int) -> Void)?,
-         onServerChange: ((ServerOption) -> Void)?, onWatchedReached: (() -> Void)?) {
+         onServerChange: ((ServerOption) -> Void)?, onWatchedReached: ((String) -> Void)?,
+         onProgress: ((String, Double, Double) -> Void)?) {
         self.player = player
         self.subtitles = subtitles
         self.episodes = episodes
         self.currentEpisodeIndex = currentEpisodeIndex
         self.servers = servers
         self.selectedServer = selectedServer
+        self.contentLink = contentLink
+        self.resumeAt = resumeAt
         self.onClose = onClose
         self.onEpisodeChange = onEpisodeChange
         self.onServerChange = onServerChange
         self.onWatchedReached = onWatchedReached
+        self.onProgress = onProgress
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -194,6 +221,11 @@ class CustomPlayerViewController: UIViewController {
         super.viewDidLayoutSubviews()
         playerLayer.frame = view.bounds
         updateOptionsLayout()
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        saveProgressNow()
     }
 
     private func updateOptionsLayout() {
@@ -333,6 +365,19 @@ class CustomPlayerViewController: UIViewController {
             centerStack.centerXAnchor.constraint(equalTo: controlsContainer.centerXAnchor),
             centerStack.centerYAnchor.constraint(equalTo: controlsContainer.centerYAnchor)
         ])
+
+        // Buffering spinner shown in place of the play/pause button. Lives on `view`
+        // (not the auto-hiding controls) so it stays visible while the stream loads.
+        loadingIndicator.color = .white
+        loadingIndicator.hidesWhenStopped = true
+        loadingIndicator.isUserInteractionEnabled = false
+        loadingIndicator.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(loadingIndicator)
+        NSLayoutConstraint.activate([
+            loadingIndicator.centerXAnchor.constraint(equalTo: playPauseButton.centerXAnchor),
+            loadingIndicator.centerYAnchor.constraint(equalTo: playPauseButton.centerYAnchor)
+        ])
+        if isPad { loadingIndicator.transform = CGAffineTransform(scaleX: 1.4, y: 1.4) }
 
         // Seek buttons pinned to the very left / right edges with a generous tap area.
         let edgeInset = scaled(28)
@@ -546,6 +591,7 @@ class CustomPlayerViewController: UIViewController {
             self?.updateTime(time)
             self?.updateSubtitle(at: time.seconds)
             self?.checkWatchedThreshold(at: time.seconds)
+            self?.reportProgress(at: time.seconds)
         }
 
         timeControlObservation = player.observe(\.timeControlStatus, options: [.new]) { [weak self] player, _ in
@@ -555,18 +601,65 @@ class CustomPlayerViewController: UIViewController {
                 let name = isPlaying ? "pause.fill" : "play.fill"
                 let cfg = UIImage.SymbolConfiguration(pointSize: self.scaled(38), weight: .medium)
                 self.playPauseButton.setImage(UIImage(systemName: name, withConfiguration: cfg), for: .normal)
+                self.updateLoadingState()
             }
         }
 
         statusObservation = player.currentItem?.observe(\.status, options: [.new]) { [weak self] item, _ in
-            if item.status == .readyToPlay {
-                DispatchQueue.main.async {
+            DispatchQueue.main.async {
+                guard let self else { return }
+                if item.status == .readyToPlay {
                     let duration = CMTimeGetSeconds(item.duration)
-                    self?.seekBar.maximumValue = Float(duration)
-                    self?.durationLabel.text = self?.formatTime(duration)
+                    self.seekBar.maximumValue = Float(duration)
+                    self.durationLabel.text = self.formatTime(duration)
+                    self.resumePlaybackIfNeeded(duration: duration)
                 }
+                self.updateLoadingState()
             }
         }
+
+        updateLoadingState()
+    }
+
+    /// Shows the spinner (hiding the play/pause button) while the player is
+    /// buffering — i.e. waiting to play or the current item isn't ready yet.
+    private func updateLoadingState() {
+        let isBuffering = player.timeControlStatus == .waitingToPlayAtSpecifiedRate
+        let notReady = (player.currentItem?.status ?? .unknown) != .readyToPlay
+        let loading = isBuffering || notReady
+        playPauseButton.isHidden = loading
+        if loading {
+            loadingIndicator.startAnimating()
+        } else {
+            loadingIndicator.stopAnimating()
+        }
+    }
+
+    /// Seeks to the saved resume point once, the first time the item is ready.
+    private func resumePlaybackIfNeeded(duration: Double) {
+        guard !hasSeekedToResume else { return }
+        hasSeekedToResume = true
+        guard resumeAt > 5 else { return }
+        if duration.isFinite, duration > 0, resumeAt >= duration - 10 { return }
+        player.seek(to: CMTime(seconds: resumeAt, preferredTimescale: 1))
+    }
+
+    /// Reports the current position no more than once per `progressSaveInterval`.
+    private func reportProgress(at seconds: Double) {
+        guard seconds.isFinite, !isSeeking else { return }
+        guard abs(seconds - lastSavedSeconds) >= progressSaveInterval else { return }
+        let duration = CMTimeGetSeconds(player.currentItem?.duration ?? .zero)
+        guard duration.isFinite, duration > 0 else { return }
+        lastSavedSeconds = seconds
+        onProgress?(contentLink, seconds, duration)
+    }
+
+    /// Final save on the way out (close / next / prev / dismiss).
+    private func saveProgressNow() {
+        let seconds = CMTimeGetSeconds(player.currentTime())
+        let duration = CMTimeGetSeconds(player.currentItem?.duration ?? .zero)
+        guard seconds.isFinite, seconds > 0, duration.isFinite, duration > 0 else { return }
+        onProgress?(contentLink, seconds, duration)
     }
 
     // MARK: - Actions
@@ -744,7 +837,7 @@ class CustomPlayerViewController: UIViewController {
     private func checkWatchedThreshold(at seconds: Double) {
         guard !hasReachedWatchedThreshold, seconds.isFinite, seconds >= watchedThreshold else { return }
         hasReachedWatchedThreshold = true
-        onWatchedReached?()
+        onWatchedReached?(contentLink)
     }
 
     private func updateTime(_ time: CMTime) {
