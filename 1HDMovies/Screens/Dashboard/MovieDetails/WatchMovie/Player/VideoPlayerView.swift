@@ -685,7 +685,9 @@ class CustomPlayerViewController: UIViewController {
         if player.timeControlStatus == .playing {
             player.pause()
         } else {
-            player.play()
+            // `play()` would reset rate to 1.0 — resume at the selected speed so
+            // 1.5x/2x survives a pause/resume.
+            player.rate = currentSpeed
             scheduleHideControls()
         }
     }
