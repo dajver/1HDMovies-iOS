@@ -152,6 +152,13 @@ struct StreamDetectorWebView: UIViewRepresentable {
         config.userContentController = contentController
         config.allowsInlineMediaPlayback = true
         config.mediaTypesRequiringUserActionForPlayback = []
+        // Each detector gets its OWN ephemeral session (fresh cookies + no shared
+        // HTTP cache). The site's embed is session/cookie-bound, so a persistent
+        // store lets the previous episode's pinned session leak into the next
+        // episode's WebView and serve the OLD .m3u8 — the "next shows the right
+        // title but plays the previous episode" bug. A clean store forces the
+        // embed to resolve from the fresh URL we hand it every time.
+        config.websiteDataStore = .nonPersistent()
 
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = context.coordinator
@@ -168,6 +175,9 @@ struct StreamDetectorWebView: UIViewRepresentable {
         if webView.url == nil {
             var request = URLRequest(url: requestUrl)
             request.setValue(referer, forHTTPHeaderField: "Referer")
+            // Bypass any cached embed page / stream response so a fresh episode
+            // never resolves to the previous episode's cached .m3u8.
+            request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
             webView.load(request)
         }
     }
