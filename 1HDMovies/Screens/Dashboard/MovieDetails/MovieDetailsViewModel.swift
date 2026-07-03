@@ -15,9 +15,11 @@ class MovieDetailsViewModel {
             await MainActor.run {
                 self.movieDetails = details
                 if let seasons = details.seasonsList, !seasons.isEmpty {
-                    let lastSeason = seasons.last!
-                    self.selectedSeason = lastSeason
-                    self.selectedEpisodes = lastSeason.episodes
+                    let watched = WatchedEpisodeRepository.shared.allWatchedEpisodeLinks()
+                    self.watchedEpisodeLinks = watched
+                    let season = self.currentWatchingSeason(seasons: seasons, watched: watched)
+                    self.selectedSeason = season
+                    self.selectedEpisodes = season.episodes
                 }
                 self.isLoading = false
             }
@@ -36,6 +38,30 @@ class MovieDetailsViewModel {
     func selectSeason(_ season: MovieSeasonDataModel) {
         selectedSeason = season
         selectedEpisodes = season.episodes
+    }
+
+    /// The season the user should land on when opening a show.
+    /// If the show has watched episodes it returns the season the user is
+    /// currently watching — the one holding their next unfinished episodes.
+    /// If nothing is watched it returns the first season, so a fresh show
+    /// opens at the beginning rather than the newest season.
+    private func currentWatchingSeason(seasons: [MovieSeasonDataModel], watched: Set<String>) -> MovieSeasonDataModel {
+        // Furthest (latest-in-order) season that contains a watched episode.
+        guard let furthestIndex = seasons.lastIndex(where: { season in
+            season.episodes.contains { watched.contains($0.link) }
+        }) else {
+            // Nothing watched → start from the first season.
+            return seasons.first!
+        }
+
+        let furthestSeason = seasons[furthestIndex]
+        // Still has unwatched episodes → that's where they're watching.
+        if furthestSeason.episodes.contains(where: { !watched.contains($0.link) }) {
+            return furthestSeason
+        }
+        // Season fully watched → advance to the next season if there is one.
+        let nextIndex = furthestIndex + 1
+        return nextIndex < seasons.count ? seasons[nextIndex] : furthestSeason
     }
 
     @MainActor

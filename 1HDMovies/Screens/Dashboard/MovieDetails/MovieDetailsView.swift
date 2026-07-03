@@ -388,8 +388,10 @@ struct MovieDetailsView: View {
                     .padding(.horizontal)
                 }
                 .onAppear {
-                    if let lastSeason = seasons.last {
-                        proxy.scrollTo(lastSeason.seasonId, anchor: .trailing)
+                    // Bring the landing season (first if unwatched, else the
+                    // currently-watching one) into view.
+                    if let selected = viewModel.selectedSeason {
+                        proxy.scrollTo(selected.seasonId, anchor: .center)
                     }
                 }
             }
