@@ -4,6 +4,7 @@ struct ContinueWatchingCard: View {
     let item: ContinueWatchingItem
     let width: CGFloat
     let height: CGFloat
+    var onRemove: (() -> Void)? = nil
 
     @State private var isHovered = false
     @Environment(\.isFocused) private var isFocused
@@ -71,6 +72,13 @@ struct ContinueWatchingCard: View {
             .brightness(isHighlighted ? 0.15 : 0)
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            Button(role: .destructive) {
+                onRemove?()
+            } label: {
+                Label("Remove from Continue Watching", systemImage: "xmark.circle")
+            }
+        }
         .animation(.easeInOut(duration: 0.2), value: isHighlighted)
         .onHover { isHovered = $0 }
     }

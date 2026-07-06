@@ -45,11 +45,18 @@ class ContinueWatchingViewModel {
     func refresh() {
         let watched = WatchedEpisodeRepository.shared.allWatchedEpisodeLinks()
         let dates = WatchedEpisodeRepository.shared.watchedDates()
+        let watchedShows = WatchedRepository.shared.allWatchedLinks()
         let shows = FavoriteRepository.shared.fetchAllFavoriteModels().filter { $0.movieType == .tvShow }
         let progress = PlaybackProgressRepository.shared
 
         var result: [ContinueWatchingItem] = []
         for show in shows {
+            // Show-level "watched" shows live in the Watched screen, not here. They
+            // come back automatically if a new season/episode is detected (see
+            // NewEpisodeService), and this is also what "Remove from Continue
+            // Watching" relies on to drop a show.
+            guard !watchedShows.contains(show.linkToDetails) else { continue }
+
             let episodes = (show.seasonsList ?? []).flatMap { $0.episodes }
             guard !episodes.isEmpty else { continue }
 
@@ -96,5 +103,21 @@ class ContinueWatchingViewModel {
 
         log.info("ContinueWatching: \(shows.count) favorited TV shows -> \(result.count) items")
         items = result.sorted { $0.lastWatchedAt > $1.lastWatchedAt }
+    }
+
+    /// Long-press "Remove from Continue Watching". A TV show is marked show-level
+    /// watched (it leaves the row, lands in the Watched screen, and returns if a new
+    /// season drops); a movie's resume point is simply cleared.
+    @MainActor
+    func remove(_ item: ContinueWatchingItem) {
+        switch item.kind {
+        case let .show(episodes, targetIndex, _):
+            WatchedRepository.shared.markWatched(linkToDetails: item.id)
+            Task { await FirebaseSyncService.shared.uploadWatchedStatus(linkToDetails: item.id) }
+            PlaybackProgressRepository.shared.clear(link: episodes[targetIndex].link)
+        case let .movie(url):
+            PlaybackProgressRepository.shared.clear(link: url)
+        }
+        refresh()
     }
 }

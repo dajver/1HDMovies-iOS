@@ -155,7 +155,8 @@ struct DashboardView: View {
                         ForEach(continueWatching.items) { item in
                             ContinueWatchingCard(item: item,
                                                  width: isRegular ? 180 : 140,
-                                                 height: isRegular ? 260 : 200)
+                                                 height: isRegular ? 260 : 200,
+                                                 onRemove: { continueWatching.remove(item) })
                         }
                     }
                     .padding(.horizontal)
