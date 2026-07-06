@@ -6,6 +6,8 @@ private let log = Logger(subsystem: "com.dajver.one.hd", category: "StreamDetect
 
 struct WatchMovieView: View {
     let movieUrl: String
+    var movieTitle: String = ""
+    var movieThumbnail: String = ""
     var episodes: [MovieEpisodesDataModel] = []
     var currentEpisodeIndex: Int = 0
 
@@ -46,7 +48,16 @@ struct WatchMovieView: View {
                         WatchedEpisodeRepository.shared.markWatched(episodeLink: link)
                     },
                     onProgress: { link, position, duration in
-                        PlaybackProgressRepository.shared.save(link: link, position: position, duration: duration)
+                        // Movies (no episode list) carry display metadata so they can
+                        // appear in Continue Watching without being favorited; episodes
+                        // get theirs from the favorited show, so pass none.
+                        if episodes.isEmpty {
+                            PlaybackProgressRepository.shared.save(link: link, position: position, duration: duration,
+                                                                   title: movieTitle, thumbnail: movieThumbnail,
+                                                                   type: MovieType.movie.rawValue)
+                        } else {
+                            PlaybackProgressRepository.shared.save(link: link, position: position, duration: duration)
+                        }
                     }
                 )
                 .ignoresSafeArea()

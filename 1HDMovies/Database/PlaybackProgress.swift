@@ -11,10 +11,21 @@ final class PlaybackProgress {
     var duration: Double      // total length when last saved (0 if unknown)
     var updatedAt: Date
 
-    init(contentLink: String, position: Double, duration: Double) {
+    // Display metadata so a movie can be shown in "Continue Watching" without being
+    // favorited (episodes get theirs from the favorited show instead). Empty for
+    // records created before this was added / for episodes.
+    var title: String = ""
+    var thumbnail: String = ""
+    var contentType: String = ""   // MovieType raw value ("Movie" / "TV Show"), "" if unknown
+
+    init(contentLink: String, position: Double, duration: Double,
+         title: String = "", thumbnail: String = "", contentType: String = "") {
         self.contentLink = contentLink
         self.position = position
         self.duration = duration
         self.updatedAt = Date()
+        self.title = title
+        self.thumbnail = thumbnail
+        self.contentType = contentType
     }
 }

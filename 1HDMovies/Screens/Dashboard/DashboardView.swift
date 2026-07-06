@@ -30,7 +30,7 @@ struct DashboardView: View {
                             .frame(height: isRegular ? 380 : 220)
                     } else {
                         MostPopularCarouselView(movies: viewModel.mostPopular) { movie in
-                            navigationPath.append(Route.watchMovie(url: movie.link))
+                            navigationPath.append(Route.watchMovie(url: movie.link, title: movie.name, thumbnail: movie.thumbnail))
                         }
                     }
 
@@ -105,8 +105,8 @@ struct DashboardView: View {
                 switch route {
                 case .movieDetails(let url):
                     MovieDetailsView(movieUrl: url)
-                case .watchMovie(let url):
-                    WatchMovieView(movieUrl: url)
+                case .watchMovie(let url, let title, let thumbnail):
+                    WatchMovieView(movieUrl: url, movieTitle: title, movieThumbnail: thumbnail)
                 case .watchEpisode(let episodes, let currentIndex):
                     WatchMovieView(movieUrl: episodes[currentIndex].link, episodes: episodes, currentEpisodeIndex: currentIndex)
                 case .allMovies:
@@ -200,7 +200,7 @@ struct DashboardView: View {
 
 enum Route: Hashable {
     case movieDetails(url: String)
-    case watchMovie(url: String)
+    case watchMovie(url: String, title: String = "", thumbnail: String = "")
     case watchEpisode(episodes: [MovieEpisodesDataModel], currentIndex: Int)
     case allMovies
     case allTvShows

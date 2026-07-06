@@ -10,8 +10,17 @@ struct ContinueWatchingCard: View {
 
     private var isHighlighted: Bool { isFocused || isHovered }
 
+    private var destination: Route {
+        switch item.kind {
+        case let .show(episodes, targetIndex, _):
+            return .watchEpisode(episodes: episodes, currentIndex: targetIndex)
+        case let .movie(url):
+            return .watchMovie(url: url, title: item.title, thumbnail: item.thumbnail)
+        }
+    }
+
     var body: some View {
-        NavigationLink(value: Route.watchEpisode(episodes: item.episodes, currentIndex: item.nextIndex)) {
+        NavigationLink(value: destination) {
             VStack(alignment: .leading, spacing: 6) {
                 ZStack {
                     AsyncImage(url: URL(string: item.thumbnail)) { phase in
@@ -44,12 +53,12 @@ struct ContinueWatchingCard: View {
                     }
                 }
 
-                Text(item.showName)
+                Text(item.title)
                     .font(.caption)
                     .fontWeight(.semibold)
                     .foregroundColor(.white)
                     .lineLimit(1)
-                Text(nextLabel)
+                Text(subtitleLabel)
                     .font(.caption2)
                     .foregroundColor(.white.opacity(0.7))
                     .lineLimit(1)
@@ -66,9 +75,12 @@ struct ContinueWatchingCard: View {
         .onHover { isHovered = $0 }
     }
 
-    private var nextLabel: String {
-        let parts = [item.nextEpisode.episodeNumber, item.nextEpisode.episodeName]
-            .filter { !$0.isEmpty }
-        return parts.isEmpty ? "Up next" : "Next: " + parts.joined(separator: " · ")
+    private var subtitleLabel: String {
+        guard let episode = item.episode else {
+            return "Resume movie"   // a movie
+        }
+        let parts = [episode.episodeNumber, episode.episodeName].filter { !$0.isEmpty }
+        let prefix = item.isResume ? "Resume: " : "Next: "
+        return parts.isEmpty ? (item.isResume ? "Resume" : "Up next") : prefix + parts.joined(separator: " · ")
     }
 }

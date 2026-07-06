@@ -21,14 +21,32 @@ class PlaybackProgressRepository {
     /// to resume (no record, too early, or effectively finished).
     func position(for link: String) -> Double? {
         guard let context = modelContext, let item = fetch(link, in: context) else { return nil }
-        guard item.position >= minResumeSeconds else { return nil }
-        if item.duration > 0, item.position >= item.duration - endTailSeconds { return nil }
+        guard isResumable(item) else { return nil }
         return item.position
     }
 
+    /// Whether a record is at a genuinely in-progress point (started, not finished).
+    private func isResumable(_ item: PlaybackProgress) -> Bool {
+        guard item.position >= minResumeSeconds else { return false }
+        if item.duration > 0, item.position >= item.duration - endTailSeconds { return false }
+        return true
+    }
+
+    /// In-progress movies (for the Continue Watching row). Only records that carry
+    /// display metadata and a movie type, most-recently-watched first.
+    func inProgressMovies() -> [PlaybackProgress] {
+        guard let context = modelContext else { return [] }
+        let all = (try? context.fetch(FetchDescriptor<PlaybackProgress>())) ?? []
+        return all
+            .filter { $0.contentType == MovieType.movie.rawValue && !$0.title.isEmpty && isResumable($0) }
+            .sorted { $0.updatedAt > $1.updatedAt }
+    }
+
     /// Upserts the resume point. Clears it once playback reaches the end so the
-    /// next open starts fresh instead of resuming at the credits.
-    func save(link: String, position: Double, duration: Double) {
+    /// next open starts fresh instead of resuming at the credits. `title`/`thumbnail`/
+    /// `type` are only written when provided (movies pass them; episodes don't).
+    func save(link: String, position: Double, duration: Double,
+              title: String? = nil, thumbnail: String? = nil, type: String? = nil) {
         guard let context = modelContext, position.isFinite, position >= 0 else { return }
 
         if duration > 0, position >= duration - endTailSeconds {
@@ -47,13 +65,17 @@ class PlaybackProgressRepository {
             item = PlaybackProgress(contentLink: link, position: position, duration: duration)
             context.insert(item)
         }
+        if let title { item.title = title }
+        if let thumbnail { item.thumbnail = thumbnail }
+        if let type { item.contentType = type }
         try? context.save()
 
         // Push to the cloud (throttled) so another device resumes from here.
         if now.timeIntervalSince(lastCloudUpload) >= cloudUploadInterval {
             lastCloudUpload = now
             let updatedAt = item.updatedAt
-            Task { await FirebaseSyncService.shared.uploadPlaybackProgress(contentLink: link, position: position, duration: duration, updatedAt: updatedAt) }
+            let (t, th, ty) = (item.title, item.thumbnail, item.contentType)
+            Task { await FirebaseSyncService.shared.uploadPlaybackProgress(contentLink: link, position: position, duration: duration, updatedAt: updatedAt, title: t, thumbnail: th, contentType: ty) }
         }
     }
 

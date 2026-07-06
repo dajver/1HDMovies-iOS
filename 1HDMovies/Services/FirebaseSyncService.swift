@@ -376,7 +376,8 @@ final class FirebaseSyncService {
 
     /// Upserts one resume point, last-writer-wins by `updatedAt` so the device that
     /// watched most recently determines the position other devices resume from.
-    func uploadPlaybackProgress(contentLink: String, position: Double, duration: Double, updatedAt: Date) async {
+    func uploadPlaybackProgress(contentLink: String, position: Double, duration: Double, updatedAt: Date,
+                                title: String = "", thumbnail: String = "", contentType: String = "") async {
         guard let uid else { return }
         do {
             let snap = try await db.collection("users").document(uid)
@@ -387,7 +388,10 @@ final class FirebaseSyncService {
                 "contentLink": contentLink,
                 "position": position,
                 "duration": duration,
-                "updatedAt": Timestamp(date: updatedAt)
+                "updatedAt": Timestamp(date: updatedAt),
+                "title": title,
+                "thumbnail": thumbnail,
+                "contentType": contentType
             ]
             if let doc = snap.documents.first {
                 let cloudDate = (doc.data()["updatedAt"] as? Timestamp)?.dateValue() ?? .distantPast
@@ -419,7 +423,8 @@ final class FirebaseSyncService {
         let locals = (try? context.fetch(FetchDescriptor<PlaybackProgress>())) ?? []
         for item in locals {
             await uploadPlaybackProgress(contentLink: item.contentLink, position: item.position,
-                                         duration: item.duration, updatedAt: item.updatedAt)
+                                         duration: item.duration, updatedAt: item.updatedAt,
+                                         title: item.title, thumbnail: item.thumbnail, contentType: item.contentType)
         }
     }
 
@@ -438,15 +443,22 @@ final class FirebaseSyncService {
             let position = data["position"] as? Double ?? 0
             let duration = data["duration"] as? Double ?? 0
             let date = (data["updatedAt"] as? Timestamp)?.dateValue() ?? .distantPast
+            let title = data["title"] as? String ?? ""
+            let thumbnail = data["thumbnail"] as? String ?? ""
+            let contentType = data["contentType"] as? String ?? ""
             if let local = localByLink[link] {
                 if date > local.updatedAt {
                     local.position = position
                     local.duration = duration
                     local.updatedAt = date
+                    local.title = title
+                    local.thumbnail = thumbnail
+                    local.contentType = contentType
                     changed = true
                 }
             } else {
-                let item = PlaybackProgress(contentLink: link, position: position, duration: duration)
+                let item = PlaybackProgress(contentLink: link, position: position, duration: duration,
+                                            title: title, thumbnail: thumbnail, contentType: contentType)
                 item.updatedAt = date
                 context.insert(item)
                 changed = true

@@ -65,6 +65,20 @@ final class NewEpisodeService {
                     if !newEpisodes.isEmpty {
                         upsertNotification(show: show, newEpisodes: newEpisodes, context: context)
                         log.info("\(newEpisodes.count) new episodes for \(show.name)")
+                        // The user had marked this show as watched, but a new episode/
+                        // season means they're not done — bring it back so they don't
+                        // miss it. Mark everything they'd already seen as watched (so
+                        // Continue Watching proposes the FIRST NEW episode, not an old
+                        // one), then clear the show-level watched flag (locally + cloud)
+                        // so it returns to the active Favorites list.
+                        if WatchedRepository.shared.isWatched(linkToDetails: link) {
+                            for oldLink in snapshot.knownEpisodeLinks {
+                                WatchedEpisodeRepository.shared.markWatched(episodeLink: oldLink)
+                            }
+                            WatchedRepository.shared.removeWatched(linkToDetails: link)
+                            Task { await FirebaseSyncService.shared.deleteWatchedStatus(linkToDetails: link) }
+                            log.info("Un-watched \(show.name) due to new episodes")
+                        }
                     }
                     snapshot.knownEpisodeLinks = currentLinks
                     snapshot.lastCheckedAt = now

@@ -123,7 +123,7 @@ struct MovieDetailsView: View {
 
                     HStack(spacing: 12) {
                         if movie.seasonsList == nil || movie.seasonsList!.isEmpty {
-                            NavigationLink(value: Route.watchMovie(url: movie.watchMovieLinkWithEpisodeId)) {
+                            NavigationLink(value: Route.watchMovie(url: movie.watchMovieLinkWithEpisodeId, title: movie.name, thumbnail: movie.thumbnail)) {
                                 HStack {
                                     Image(systemName: "play.fill")
                                     Text("Watch Now")
@@ -213,7 +213,7 @@ struct MovieDetailsView: View {
             .padding(.horizontal)
 
             if movie.seasonsList == nil || movie.seasonsList!.isEmpty {
-                NavigationLink(value: Route.watchMovie(url: movie.watchMovieLinkWithEpisodeId)) {
+                NavigationLink(value: Route.watchMovie(url: movie.watchMovieLinkWithEpisodeId, title: movie.name, thumbnail: movie.thumbnail)) {
                     HStack {
                         Image(systemName: "play.fill")
                         Text("Watch Now")
