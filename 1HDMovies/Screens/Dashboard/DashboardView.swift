@@ -156,7 +156,8 @@ struct DashboardView: View {
                             ContinueWatchingCard(item: item,
                                                  width: isRegular ? 180 : 140,
                                                  height: isRegular ? 260 : 200,
-                                                 onRemove: { continueWatching.remove(item) })
+                                                 onRemove: { continueWatching.remove(item) },
+                                                 onOpenDetails: { navigationPath.append(Route.movieDetails(url: item.id)) })
                         }
                     }
                     .padding(.horizontal)

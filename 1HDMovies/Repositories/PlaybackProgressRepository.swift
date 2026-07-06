@@ -12,6 +12,11 @@ class PlaybackProgressRepository {
     private let minResumeSeconds: Double = 5
     private let endTailSeconds: Double = 15
 
+    /// Watching past this fraction of the runtime counts as "finished" — the movie /
+    /// episode drops out of Continue Watching (last-episode-watched shows leave the row
+    /// entirely; abandoned-then-resumed items advance to the next episode instead).
+    private let finishedFraction: Double = 0.85
+
     /// Progress saves locally every ~10s; throttle the cloud push so we don't write
     /// to Firestore on every tick. Cross-device handoff is still near-real-time.
     private var lastCloudUpload: Date = .distantPast
@@ -28,7 +33,10 @@ class PlaybackProgressRepository {
     /// Whether a record is at a genuinely in-progress point (started, not finished).
     private func isResumable(_ item: PlaybackProgress) -> Bool {
         guard item.position >= minResumeSeconds else { return false }
-        if item.duration > 0, item.position >= item.duration - endTailSeconds { return false }
+        if item.duration > 0 {
+            if item.position >= item.duration - endTailSeconds { return false }
+            if item.position >= item.duration * finishedFraction { return false }
+        }
         return true
     }
 

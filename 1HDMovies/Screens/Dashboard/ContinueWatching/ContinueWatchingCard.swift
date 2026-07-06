@@ -5,6 +5,7 @@ struct ContinueWatchingCard: View {
     let width: CGFloat
     let height: CGFloat
     var onRemove: (() -> Void)? = nil
+    var onOpenDetails: (() -> Void)? = nil
 
     @State private var isHovered = false
     @Environment(\.isFocused) private var isFocused
@@ -73,6 +74,13 @@ struct ContinueWatchingCard: View {
         }
         .buttonStyle(.plain)
         .contextMenu {
+            if let onOpenDetails {
+                Button {
+                    onOpenDetails()
+                } label: {
+                    Label(item.episode != nil ? "Open TV Show" : "Open Movie", systemImage: "info.circle")
+                }
+            }
             Button(role: .destructive) {
                 onRemove?()
             } label: {
