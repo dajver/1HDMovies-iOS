@@ -33,6 +33,7 @@ struct WatchMovieView: View {
                     subtitles: detectedSubtitles,
                     episodes: episodes,
                     currentEpisodeIndex: activeEpisodeIndex,
+                    title: episodes.isEmpty ? movieTitle : "",
                     servers: viewModel.servers,
                     selectedServer: viewModel.selectedServer,
                     contentLink: activeMovieUrl,

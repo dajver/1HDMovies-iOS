@@ -11,6 +11,8 @@ struct VideoPlayerView: View {
     var subtitles: [SubtitleTrack] = []
     var episodes: [MovieEpisodesDataModel] = []
     var currentEpisodeIndex: Int = 0
+    /// Title shown in the top bar for a movie (episodes carry their own label).
+    var title: String = ""
     var servers: [ServerOption] = []
     var selectedServer: ServerOption?
     /// Stable link of the item being played (episode link / movie watch URL). The
@@ -62,6 +64,7 @@ struct VideoPlayerView: View {
             subtitles: subtitles,
             episodes: episodes,
             currentEpisodeIndex: currentEpisodeIndex,
+            title: title,
             servers: servers,
             selectedServer: selectedServer,
             contentLink: contentLink,
@@ -97,6 +100,7 @@ class CustomPlayerViewController: UIViewController {
     private let subtitles: [SubtitleTrack]
     private let episodes: [MovieEpisodesDataModel]
     private let currentEpisodeIndex: Int
+    private let titleText: String
     private let servers: [ServerOption]
     private let selectedServer: ServerOption?
     private let contentLink: String
@@ -162,7 +166,7 @@ class CustomPlayerViewController: UIViewController {
     private var timeControlObservation: NSKeyValueObservation?
 
     init(player: AVPlayer, subtitles: [SubtitleTrack], episodes: [MovieEpisodesDataModel],
-         currentEpisodeIndex: Int, servers: [ServerOption], selectedServer: ServerOption?,
+         currentEpisodeIndex: Int, title: String = "", servers: [ServerOption], selectedServer: ServerOption?,
          contentLink: String, resumeAt: Double,
          onClose: @escaping () -> Void, onEpisodeChange: ((Int) -> Void)?,
          onServerChange: ((ServerOption) -> Void)?, onWatchedReached: ((String) -> Void)?,
@@ -171,6 +175,7 @@ class CustomPlayerViewController: UIViewController {
         self.subtitles = subtitles
         self.episodes = episodes
         self.currentEpisodeIndex = currentEpisodeIndex
+        self.titleText = title
         self.servers = servers
         self.selectedServer = selectedServer
         self.contentLink = contentLink
@@ -310,10 +315,17 @@ class CustomPlayerViewController: UIViewController {
             closeButton.heightAnchor.constraint(equalToConstant: 44)
         ])
 
-        // Episode label (top bar, center)
+        // Title label (top bar, center): the episode label for a show, or the movie
+        // name for a standalone movie.
+        let barTitle: String
         if !episodes.isEmpty {
             let ep = episodes[currentEpisodeIndex]
-            episodeLabel.text = ep.episodeName.isEmpty ? ep.episodeNumber : "\(ep.episodeNumber) - \(ep.episodeName)"
+            barTitle = ep.episodeName.isEmpty ? ep.episodeNumber : "\(ep.episodeNumber) - \(ep.episodeName)"
+        } else {
+            barTitle = titleText
+        }
+        if !barTitle.isEmpty {
+            episodeLabel.text = barTitle
             episodeLabel.font = .systemFont(ofSize: 15, weight: .medium)
             episodeLabel.textColor = .white
             episodeLabel.textAlignment = .center
