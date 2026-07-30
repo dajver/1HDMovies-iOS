@@ -1,6 +1,6 @@
 # 1HDMovies
 
-1HDMovies is an iOS client for [1hd.art website](https://1hd.art). 1HD is a free TV shows streaming website with zero ads, it allows you to watch TV shows online, watch movies online free in high quality for free. You can also browse by genre, save favorites, and search the entire library.
+1HDMovies is an iOS client for [1hd.one website](https://1hd.one). 1HD is a free TV shows streaming website with zero ads, it allows you to watch TV shows online, watch movies online free in high quality for free. You can also browse by genre, save favorites, and search the entire library.
 
 ## Disclaimer
 This app is not official. It was made for personal usage on iPhone/iPad, so all problems and issues which are in, made in purpose or because I'm lazy. But I will improve that product for usage when these bugs will be found.

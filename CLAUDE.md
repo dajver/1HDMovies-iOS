@@ -1,13 +1,13 @@
 # 1HD Movies — iOS app
 
-A SwiftUI app that browses and streams movies / TV shows by **scraping the website `1hd.art`** (no official API). Content is parsed from HTML with SwiftSoup; playback streams are sniffed out of the embed pages at runtime.
+A SwiftUI app that browses and streams movies / TV shows by **scraping the website `1hd.one`** (no official API). Content is parsed from HTML with SwiftSoup; playback streams are sniffed out of the embed pages at runtime.
 
 ## Tech stack
 - **SwiftUI + MVVM**, `@Observable` view models (Observation framework). Target **iOS 26.2**, model name `onehdApp` (`@main` in `1HDMoviesApp.swift`).
 - **SwiftData** for local persistence (`@Model` classes in `Database/`).
 - **Firebase** (Auth + Firestore) for cross-device sync; **Google Sign-In**.
 - **SwiftSoup** for HTML scraping. **AVPlayer + WKWebView** for the custom player.
-- Base site URL and scraping User-Agent live in `Config.swift` (`https://1hd.art`).
+- Base site URL and scraping User-Agent live in `Config.swift` (`https://1hd.one`).
 
 ## Project layout (`1HDMovies/`)
 - `1HDMoviesApp.swift` — app entry. Declares the SwiftData `Schema` (every `@Model` must be listed here) and, in `SplashView().onAppear`, injects the shared `ModelContext` into each repository/service singleton. Firebase sync + new-episode check run from its `.task`.
@@ -45,7 +45,7 @@ xcodebuild -project 1HDMovies.xcodeproj -scheme 1HDMovies \
   - **85%-finished cutoff**: an item is treated as "finished" (drops out of the row) once watched past **85% of its runtime** — `PlaybackProgressRepository.isResumable` returns false past `finishedFraction = 0.85` (in addition to the existing 15s end-tail check, whichever hits first). This gates **both** movies (`inProgressMovies()`) and episodes (`position(for:)`), so a movie past 85% disappears and a show whose **furthest-watched episode is past 85%** advances to the next episode — or leaves the row entirely if that was the last episode. The `PlaybackProgress` record itself isn't deleted at 85% (only at the true end-tail); it just stops counting as resumable, so re-opening starts from 0.
   - **Long-press a card → context menu** (`ContinueWatchingCard`):
     - **"Remove from Continue Watching"** (`onRemove` → `ContinueWatchingViewModel.remove`): a **movie** clears its `PlaybackProgress` (`clear()`, deletes cloud doc); a **TV show** is marked **show-level watched** (`WatchedRepository.markWatched` + explicit `uploadWatchedStatus`) so it leaves the row / lands in Watched / returns on a new season, and its target episode's progress is cleared.
-    - **"Open Movie" / "Open TV Show"** (`onOpenDetails` → `navigationPath.append(Route.movieDetails(url: item.id))`): opens the details page. Works for **both** kinds because `item.id` is the details URL for shows (`linkToDetails`) and, for movies, the watch URL — which on `1hd.art` **is the same page as the movie details URL** (`https://1hd.art/movie/…/`), so it can be passed straight to `Route.movieDetails`.
+    - **"Open Movie" / "Open TV Show"** (`onOpenDetails` → `navigationPath.append(Route.movieDetails(url: item.id))`): opens the details page. Works for **both** kinds because `item.id` is the details URL for shows (`linkToDetails`) and, for movies, the watch URL — which on `1hd.one` **is the same page as the movie details URL** (`https://1hd.one/movie/…/`), so it can be passed straight to `Route.movieDetails`.
 - **Watched TV show resurfaces on new content**: in `NewEpisodeService.checkForNewEpisodes`, when new episodes are detected for a favorited show that is currently **show-level watched**, it marks the previously-known episodes watched (baseline, so Continue Watching lands on the **first new** episode) and **un-watches** the show (`removeWatched` + `deleteWatchedStatus`), returning it to active Favorites + Continue Watching so the user doesn't miss the new season/episode. (Runs on launch with the 6h throttle; pull-to-refresh bypasses it.)
 - **Player top-bar title**: the center label in `CustomPlayerViewController` shows the **episode label for shows** or the **movie name for movies** (`titleText`, passed as `VideoPlayerView.title` from `WatchMovieView`; empty for episodes since they carry their own label). Hidden when empty.
 - **New Releases** row: same content as the top slider but cards open *details* (`Route.movieDetails`), not playback.
