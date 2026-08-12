@@ -5,7 +5,7 @@ class YouMayAlsoLikeRepository {
     static let shared = YouMayAlsoLikeRepository()
 
     func fetchYouMayAlsoLike(url: String) async throws -> [MoviesDataModel] {
-        let linkToMovie = url.hasPrefix("https://1hd") ? url : "\(Config.baseURL)/\(url)"
+        let linkToMovie = SiteDomain.absolute(url)
         let html = try await HttpClient.shared.get(linkToMovie)
         let doc = try SwiftSoup.parse(html)
         let moviesElements = try doc.select("div.swiper-slide").select("div.item-film")

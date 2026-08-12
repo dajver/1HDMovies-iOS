@@ -183,10 +183,13 @@ struct StreamDetectorWebView: UIViewRepresentable {
     }
 
     func updateUIView(_ webView: WKWebView, context: Context) {
-        guard let requestUrl = URL(string: url) else { return }
+        // Episode / movie links come from saved records that may predate a domain
+        // move, and this load bypasses HttpClient — so point them at the live host
+        // here. Embed URLs live on other hosts and pass through untouched.
+        guard let requestUrl = URL(string: SiteDomain.live(url)) else { return }
         if webView.url == nil {
             var request = URLRequest(url: requestUrl)
-            request.setValue(referer, forHTTPHeaderField: "Referer")
+            request.setValue(SiteDomain.live(referer), forHTTPHeaderField: "Referer")
             // Bypass any cached embed page / stream response so a fresh episode
             // never resolves to the previous episode's cached .m3u8.
             request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData

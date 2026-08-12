@@ -17,7 +17,23 @@ class HttpClient {
         session = URLSession(configuration: config)
     }
 
+    /// Fetches a page, pointing site URLs at whichever domain is currently live.
+    ///
+    /// A failure on a site URL is treated as a possible domain move: the candidate
+    /// list is re-probed once and the request retried against the resolved host, so
+    /// a move heals mid-session without the user seeing anything but a slower load.
+    /// Non-site URLs (embed / CDN hosts) fail through untouched.
     func get(_ urlString: String) async throws -> String {
+        do {
+            return try await fetch(SiteDomain.live(urlString))
+        } catch {
+            guard SiteDomain.isSiteURL(urlString) else { throw error }
+            guard await SiteDomain.rediscover() else { throw error }
+            return try await fetch(SiteDomain.live(urlString))
+        }
+    }
+
+    private func fetch(_ urlString: String) async throws -> String {
         guard let url = URL(string: urlString) else {
             throw URLError(.badURL)
         }

@@ -42,6 +42,15 @@ final class FirebaseSyncService {
 
         log.info("Starting full sync for user: \(uid)")
 
+        // Domain-move hygiene, always before reconciling: re-key local + cloud
+        // records to the live host so old-host docs match instead of being
+        // duplicated. This must live here (not just at launch) because syncAll
+        // is also reachable mid-session (sign-in, the Sync Now button).
+        if let context = FavoriteRepository.shared.modelContext {
+            LinkMigration.run(modelContext: context)
+        }
+        await migrateStoredLinks(uid: uid)
+
         do {
             try await uploadNewFavorites(uid: uid)
             try await downloadFavorites(uid: uid)
@@ -60,6 +69,109 @@ final class FirebaseSyncService {
             log.info("Full sync completed")
         } catch {
             log.error("Sync failed: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - Domain-move link migration
+
+    /// Re-keys site URLs stored in cloud docs to the currently-live host, updating
+    /// field values in place (doc IDs are untouched, so `firebaseId` links stay
+    /// valid). Must run **before** `syncAll`: reconciliation matches records by
+    /// link value, so old-host cloud docs would otherwise be treated as different
+    /// content and duplicated by the upload/download passes.
+    ///
+    /// If a doc already exists under the live-host key (written after the move,
+    /// so necessarily fresher), the old-host doc is dropped in its favor —
+    /// mirroring `LinkMigration`'s local collision rule.
+    private func migrateStoredLinks(uid: String) async {
+        await migrateCollection("favorites", uid: uid, keyField: "linkToDetails") { data in
+            var updates = movedFields(data, fields: ["linkToDetails", "linkToWatch", "watchMovieLinkWithEpisodeId"])
+            if let seasons = data["seasonsList"] as? [[String: Any]] {
+                var seasonsChanged = false
+                let migrated = seasons.map { season -> [String: Any] in
+                    var season = season
+                    if let episodes = season["episodes"] as? [[String: Any]] {
+                        season["episodes"] = episodes.map { episode -> [String: Any] in
+                            var episode = episode
+                            if let link = episode["link"] as? String {
+                                let live = SiteDomain.live(link)
+                                if live != link {
+                                    episode["link"] = live
+                                    seasonsChanged = true
+                                }
+                            }
+                            return episode
+                        }
+                    }
+                    return season
+                }
+                if seasonsChanged { updates["seasonsList"] = migrated }
+            }
+            return updates
+        }
+
+        await migrateCollection("watched", uid: uid, keyField: "linkToDetails") {
+            movedFields($0, fields: ["linkToDetails"])
+        }
+        await migrateCollection("watchedEpisodes", uid: uid, keyField: "episodeLink") {
+            movedFields($0, fields: ["episodeLink"])
+        }
+        await migrateCollection("playbackProgress", uid: uid, keyField: "contentLink") {
+            movedFields($0, fields: ["contentLink"])
+        }
+        await migrateCollection("episodeSnapshots", uid: uid, keyField: "linkToDetails") { data in
+            var updates = movedFields(data, fields: ["linkToDetails"])
+            if let links = data["knownEpisodeLinks"] as? [String] {
+                let live = links.map { SiteDomain.live($0) }
+                if live != links { updates["knownEpisodeLinks"] = live }
+            }
+            return updates
+        }
+        await migrateCollection("showNotifications", uid: uid, keyField: "showLinkToDetails") {
+            movedFields($0, fields: ["showLinkToDetails"])
+        }
+    }
+
+    /// The subset of `fields` whose string value changes under a live-host rewrite.
+    private func movedFields(_ data: [String: Any], fields: [String]) -> [String: Any] {
+        var updates: [String: Any] = [:]
+        for field in fields {
+            guard let value = data[field] as? String else { continue }
+            let live = SiteDomain.live(value)
+            if live != value { updates[field] = live }
+        }
+        return updates
+    }
+
+    private func migrateCollection(_ name: String, uid: String, keyField: String,
+                                   rewrite: ([String: Any]) -> [String: Any]) async {
+        do {
+            let snapshot = try await db.collection("users").document(uid)
+                .collection(name).getDocuments()
+            var keys = Set(snapshot.documents.compactMap { $0.data()[keyField] as? String })
+            var migrated = 0, dropped = 0
+            for doc in snapshot.documents {
+                let data = doc.data()
+                let updates = rewrite(data)
+                guard !updates.isEmpty else { continue }
+                if let oldKey = data[keyField] as? String,
+                   let newKey = updates[keyField] as? String {
+                    keys.remove(oldKey)
+                    if keys.contains(newKey) {
+                        try await doc.reference.delete()
+                        dropped += 1
+                        continue
+                    }
+                    keys.insert(newKey)
+                }
+                try await doc.reference.updateData(updates)
+                migrated += 1
+            }
+            if migrated > 0 || dropped > 0 {
+                log.info("Re-keyed \(migrated) \(name) docs to live host (dropped \(dropped) stale)")
+            }
+        } catch {
+            log.error("Link migration failed for \(name): \(error.localizedDescription)")
         }
     }
 

@@ -43,10 +43,19 @@ struct onehdApp: App {
                     PlaybackProgressRepository.shared.modelContext = context
                     NewEpisodeService.shared.modelContext = context
                     FavoriteMigration.migrateIfNeeded(modelContext: context)
+                    // Re-key stored records saved under a previous site domain so
+                    // they match freshly-scraped links on the live one.
+                    LinkMigration.run(modelContext: context)
                 }
                 .task {
                     if AuthenticationService.shared.isSignedIn {
+                        // syncAll migrates old-host links (local + cloud) itself
+                        // before reconciling.
                         await FirebaseSyncService.shared.syncAll()
+                        // Anything the download passes still handed us under an
+                        // old host (e.g. written by a device on an older build)
+                        // gets re-keyed on the spot.
+                        LinkMigration.run(modelContext: sharedModelContainer.mainContext)
                     }
                     await NewEpisodeService.shared.checkForNewEpisodes()
                 }

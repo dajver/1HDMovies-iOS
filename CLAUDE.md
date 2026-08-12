@@ -7,12 +7,12 @@ A SwiftUI app that browses and streams movies / TV shows by **scraping the websi
 - **SwiftData** for local persistence (`@Model` classes in `Database/`).
 - **Firebase** (Auth + Firestore) for cross-device sync; **Google Sign-In**.
 - **SwiftSoup** for HTML scraping. **AVPlayer + WKWebView** for the custom player.
-- Base site URL and scraping User-Agent live in `Config.swift` (`https://1hd.one`).
+- Scraping User-Agent lives in `Config.swift`; `Config.baseURL` is **resolved at runtime** by `Network/SiteDomain.swift` (currently `https://1hd.one`) — see Domain resilience below.
 
 ## Project layout (`1HDMovies/`)
 - `1HDMoviesApp.swift` — app entry. Declares the SwiftData `Schema` (every `@Model` must be listed here) and, in `SplashView().onAppear`, injects the shared `ModelContext` into each repository/service singleton. Firebase sync + new-episode check run from its `.task`.
-- `Config.swift` — `baseURL`, `userAgent`.
-- `Network/` — `HttpClient` (async GET with the spoofed UA), `SwiftSoupExtensions`.
+- `Config.swift` — `baseURL` (computed → `SiteDomain.baseURL`), `userAgent`.
+- `Network/` — `HttpClient` (async GET with the spoofed UA), `SiteDomain` (live-domain resolver), `SwiftSoupExtensions`.
 - `Models/` — plain data structs (`MovieModels.swift` has `MoviesDataModel`, `MoviesDetailsDataModel`, `MovieSeasonDataModel`, `MovieEpisodesDataModel`, `MostPopularMoviesDataModel`, `MovieType`).
 - `Repositories/` — one per concern. Two kinds:
   - **Scraping repos** (`MovieDetailsRepository`, `MostPopularRepository`, `SearchRepository`, …) fetch HTML and parse it.
@@ -35,6 +35,14 @@ xcodebuild -project 1HDMovies.xcodeproj -scheme 1HDMovies \
 - **Playback** (`Screens/Dashboard/MovieDetails/WatchMovie/`): `WatchMovieView` loads the embed page in a hidden `StreamDetectorWebView` (WKWebView with injected JS) that intercepts `.m3u8`/subtitle URLs, then hands the detected stream to `VideoPlayerView` (a `UIViewControllerRepresentable` wrapping a custom AVPlayer controller). Server switching and prev/next-episode are callbacks back into `WatchMovieView`.
 - **Favorites / Watched / Continue Watching / Notifications**: see Features below. All favorited shows' season lists are stored on `FavoriteMovie` and kept fresh via `FavoriteRepository.refreshFavoriteIfNeeded`.
 - **Firebase sync**: `FirebaseSyncService.syncAll()` (launch, when signed in) reconciles favorites, watched movies, watched episodes, **playback progress**, episode snapshots, and show notifications. Each model has upload/download (and some delete) helpers; single-item uploads fire from the persistence repos on mutation. All guard on `uid` so they no-op when signed out. Playback progress (and snapshots/notifications) reconcile **last-writer-wins by a date field** (`updatedAt`/`lastCheckedAt`/`detectedAt`).
+
+## Domain resilience (`Network/SiteDomain.swift`)
+The site hops TLD periodically (`1hd.art` → `1hd.one` → …), which would otherwise brick every scraping repo at once. `Config.baseURL` is therefore **computed**, reading a host resolved at runtime:
+- **No probing on the happy path.** The resolved host is cached in `UserDefaults` (`site.resolvedHost`), so launches go straight to the live domain. Nothing is probed until a request actually fails.
+- **Self-healing.** `HttpClient.get` rewrites site URLs to the live host, and on failure of a *site* URL calls `SiteDomain.rediscover()` and retries once. Non-site URLs (embed/CDN hosts) fail through untouched so a dead stream host never triggers a domain probe.
+- **Probing** fans out over `SiteDomain.candidateHosts` (a list of `1hd.*` TLDs) concurrently and adopts the one **highest in preference order**, short-circuiting the moment the preferred host answers. Validation is **content-based, not status-based** — dead domains are often parked on a placeholder that returns 200 (`1hd.to` does today), so a page only counts if it contains `swiper-slide` **and** a `/movie/` link, i.e. markup the scrapers can parse. The probe follows redirects and adopts the **final** host, so an abandoned domain 301-ing to a brand-new name teaches the app a host that isn't in the candidate list at all. Every host ever adopted is remembered in `site.knownHosts` for URL rewriting. Measured: ~0.3s when the cached host is alive, ~8s (one timeout) to recover from a dead/parked one, then cached.
+- **Stored links are migrated at launch** (`Database/LinkMigration.swift` + `FirebaseSyncService.migrateStoredLinks`). Favorites, `WatchedMovie`, `WatchedEpisode`, `PlaybackProgress`, snapshots and notifications are keyed by full URLs carrying whatever domain was live when saved; after a move those keys no longer match freshly-scraped links (favorites looked broken, watched/progress history looked lost). On launch, `LinkMigration.run` re-keys every local record to `SiteDomain.live` (including `FavoriteMovie.seasonsJson` episode links and snapshot `knownEpisodeLinks`); when signed in, `migrateStoredLinks()` re-keys the Firestore docs the same way — **field updates in place** (doc IDs are auto-generated, so `firebaseId` links survive) and it runs **before `syncAll`**, otherwise reconciliation (which matches by link value) would duplicate old-host cloud docs against migrated local records. Collision rule everywhere: a record already existing under the live-host key was saved after the move, so it wins and the old-host record is deleted. A mid-session hop still relies on request-time rewriting until the next launch.
+- Building scraped `href`s goes through `SiteDomain.absolute(_:)` (handles relative *and* absolute, rewrites the host) — don't reintroduce `hasPrefix("https://1hd")` checks. WKWebView / AVPlayer loads bypass `HttpClient`, so `StreamDetectorWebView.updateUIView` and `VideoPlayerView.presentPlayer` apply `SiteDomain.live` to their URL + Referer themselves.
 
 ## Implemented features (so future sessions know they exist)
 - Per-**episode** watched tracking; an episode is marked watched only after **5 minutes of playback** (threshold in `VideoPlayerView`/`CustomPlayerViewController`, fired via `onWatchedReached`). **Long-press an episode** → context menu to mark watched/unwatched.

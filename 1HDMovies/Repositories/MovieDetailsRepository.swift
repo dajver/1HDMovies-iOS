@@ -5,7 +5,7 @@ class MovieDetailsRepository {
     static let shared = MovieDetailsRepository()
 
     func fetchDetails(url: String) async throws -> MoviesDetailsDataModel {
-        let linkToMovieDetails = url.hasPrefix("https://1hd") ? url : "\(Config.baseURL)\(url)"
+        let linkToMovieDetails = SiteDomain.absolute(url)
         let html = try await HttpClient.shared.get(linkToMovieDetails)
         let doc = try SwiftSoup.parse(html)
         let type: MovieType = linkToMovieDetails.contains("movie") ? .movie : .tvShow
@@ -30,7 +30,7 @@ class MovieDetailsRepository {
         let release = ratingAndOther.count > 5 ? ratingAndOther[5] : ""
         let production = ratingAndOther.count > 6 ? ratingAndOther[6] : ""
 
-        let fullLinkToWatch = linkToWatch.hasPrefix("https://") ? linkToWatch : "\(Config.baseURL)\(linkToWatch)"
+        let fullLinkToWatch = SiteDomain.absolute(linkToWatch)
         let watchMovieLinkWithEpisodeId = fullLinkToWatch
 
         if type == .movie {
@@ -66,8 +66,7 @@ class MovieDetailsRepository {
                 let title = try anchor.text().trimmingCharacters(in: .whitespacesAndNewlines)
                 var href = try anchor.attr("href")
                 guard !title.isEmpty, !href.isEmpty else { continue }
-                if !href.hasPrefix("http") { href = "\(Config.baseURL)\(href)" }
-                result.append(TagRef(name: title, url: href))
+                result.append(TagRef(name: title, url: SiteDomain.absolute(href)))
             }
             return result
         }
@@ -101,7 +100,7 @@ class MovieDetailsRepository {
                 let episodeNumber = try element.select("span.number").text().trimmingCharacters(in: .whitespacesAndNewlines)
                 let episodeName = try element.select("span.name").text().trimmingCharacters(in: .whitespacesAndNewlines)
                 let href = try element.attr("href")
-                let link = href.hasPrefix("https://1hd") ? href : "\(Config.baseURL)\(href)"
+                let link = SiteDomain.absolute(href)
                 episodes.append(MovieEpisodesDataModel(episodeNumber: episodeNumber, episodeName: episodeName, link: link))
             }
             return episodes

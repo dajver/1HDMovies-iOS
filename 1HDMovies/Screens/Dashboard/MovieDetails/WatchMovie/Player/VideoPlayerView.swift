@@ -49,9 +49,12 @@ struct VideoPlayerView: View {
             try AVAudioSession.sharedInstance().setActive(true)
         } catch {}
 
+        // The referer can be a saved link from before a domain move; the stream host
+        // validates it, so send the live domain.
+        let liveReferer = SiteDomain.live(referer)
         let headers = [
-            "Referer": referer,
-            "Origin": referer.hasSuffix("/") ? String(referer.dropLast()) : referer,
+            "Referer": liveReferer,
+            "Origin": liveReferer.hasSuffix("/") ? String(liveReferer.dropLast()) : liveReferer,
             "User-Agent": Config.userAgent
         ]
 

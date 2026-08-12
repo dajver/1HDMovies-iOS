@@ -22,7 +22,7 @@ class MostPopularRepository {
                 href = (try slide.select("div.div-buttons a").first()?.attr("href")) ?? ""
             }
             guard !href.isEmpty else { continue }
-            let link = href.hasPrefix("https://1hd") ? href : "\(Config.baseURL)\(href)"
+            let link = SiteDomain.absolute(href)
             guard !seen.contains(link) else { continue }
 
             let name = (try captionLink?.attr("title")) ?? ""
