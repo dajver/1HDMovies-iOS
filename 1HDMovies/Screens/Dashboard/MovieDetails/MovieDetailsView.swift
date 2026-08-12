@@ -383,6 +383,29 @@ struct MovieDetailsView: View {
                                 action: { viewModel.selectSeason(season) }
                             )
                             .id(season.seasonId)
+                            .contextMenu {
+                                let links = season.episodes.map(\.link)
+                                if links.contains(where: { !viewModel.watchedEpisodeLinks.contains($0) }) {
+                                    Button {
+                                        for link in links where !viewModel.watchedEpisodeLinks.contains(link) {
+                                            WatchedEpisodeRepository.shared.markWatched(episodeLink: link)
+                                        }
+                                        viewModel.refreshWatchedEpisodes()
+                                    } label: {
+                                        Label("Mark season as watched", systemImage: "eye")
+                                    }
+                                }
+                                if links.contains(where: { viewModel.watchedEpisodeLinks.contains($0) }) {
+                                    Button(role: .destructive) {
+                                        for link in links where viewModel.watchedEpisodeLinks.contains(link) {
+                                            WatchedEpisodeRepository.shared.removeWatched(episodeLink: link)
+                                        }
+                                        viewModel.refreshWatchedEpisodes()
+                                    } label: {
+                                        Label("Mark season as unwatched", systemImage: "eye.slash")
+                                    }
+                                }
+                            }
                         }
                     }
                     .padding(.horizontal)
